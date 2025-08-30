@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Istanbul Coastline Atlas</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hack:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="frontend/css/styles.css">
+</head>
+<body>
+<!-- Header -->
+<div class="header">
+    <h1>Istanbul Coastline Atlas</h1>
+</div>
+
+<!-- Map Container -->
+<div id="map"></div>
+
+<!-- Drawing Toggle Button -->
+<button class="drawing-toggle" id="drawingToggle">✏️</button>
+
+<!-- Drawing Panel -->
+<div class="drawing-panel" id="drawingPanel">
+    <div class="drawing-panel-header">
+        <h3 class="drawing-panel-title">Drawing Tools</h3>
+        <button class="close-btn" id="closePanel">×</button>
+    </div>
+    <div class="drawing-panel-content">
+        <div class="drawing-controls">
+            <div class="control-group">
+                <div class="control-label">Drawing Mode</div>
+                <button class="btn" id="drawBtn">Start Drawing</button>
+            </div>
+            <div class="control-group">
+                <div class="control-label">Actions</div>
+                <button class="btn btn-clear" id="clearBtn">Clear All</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+<script src="../config/mapbox-config.js"></script>
+<script src="js/drawing-tools.js"></script>
+<script src="js/layer-interactions.js"></script>
+<script src="frontend/js/main.js"></script>
+</body>
+</html>
