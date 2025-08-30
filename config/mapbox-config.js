@@ -1,5 +1,5 @@
 // Mapbox configuration
-const MAPBOX_CONFIG = {
+const MAPBOX = {
     accessToken: 'pk.eyJ1IjoiZ29rY2VuZXJraWxpYyIsImEiOiJjbWVtdzR3cHkwd3o1MmtvbGJqYTFqa2s3In0.Mc_XAHqv1rpTz6BuZndegQ',
     style: 'mapbox://styles/gokcenerkilic/cm7et6tk1003o01qpfltz19qs',
     center: [29.0, 41.0], // Istanbul coordinates
