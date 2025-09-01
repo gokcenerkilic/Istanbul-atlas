@@ -1,6 +1,6 @@
 # Istanbul Coastline Atlas
 
-An interactive web mapping application for exploring Istanbul's coastline with drawing tools and layer interactions.
+An interactive web mapping application for exploring Istanbul's coastline with drawing overlay and layer interactions.
 
 ## Project Structure
 
@@ -13,7 +13,7 @@ istanbul-coastline-atlas/
 │   └── js/
 │       ├── main.js             # Map initialization
 │       ├── layer-interactions.js # R1 layer hover/click functionality
-│       └── drawing-tools.js    # Freehand drawing functionality
+│       └── drawing-overlay.js    # Freehand drawing functionality
 ├── data/
 │   ├── layers/                 # Layer data files
 │   └── popup-content/          # Images and content for popups
@@ -35,7 +35,7 @@ istanbul-coastline-atlas/
 - **Click**: Pins the popup permanently (until closed)
 - **Popup Content**: Placeholder for images and information
 
-### ✏️ **Drawing Tools**
+### ✏️ **Drawing Overlay**
 - Floating pencil icon to open drawing panel
 - Freehand drawing with black lines
 - Clear all drawings functionality
@@ -118,5 +118,5 @@ The R1 layer configuration is in `config/mapbox-config.js`:
 - **styles.css**: Complete styling including custom cursor
 - **main.js**: Map initialization and setup
 - **layer-interactions.js**: R1 hover/click functionality
-- **drawing-tools.js**: Freehand drawing implementation
+- **drawing-overlay.js**: Freehand drawing implementation
 - **mapbox-config.js**: Configuration and API credentials
