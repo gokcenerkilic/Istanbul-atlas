@@ -1,5 +1,5 @@
 // frontend/js/main.js
-import { MAPBOX } from '../../config/mapbox.js';
+import { MAPBOX } from '../../config/mapbox-config.js';
 import { setupDrawing } from './drawing-wire-in.js';
 // If exported from layer-interactions.js:
 import { initializeLayerInteractions } from './layer-interactions.js';
