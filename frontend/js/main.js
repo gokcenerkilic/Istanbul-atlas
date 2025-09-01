@@ -1,8 +1,7 @@
 // frontend/js/main.js
-
-import { MAPBOX } from '../../config/mapbox-config.js';
+import { MAPBOX } from '../../config/mapbox.js';
 import { setupDrawing } from './drawing-wire-in.js';
-// If your file exports this, keep the import; otherwise remove it or export from that file:
+// If exported from layer-interactions.js:
 import { initializeLayerInteractions } from './layer-interactions.js';
 
 mapboxgl.accessToken = MAPBOX.ACCESS_TOKEN;
@@ -17,19 +16,15 @@ const map = new mapboxgl.Map({
 map.on('load', () => {
   console.log('Map loaded successfully');
 
-  // Wire-in the drawing overlay (adds/updates the 'drawings' source/layer itself)
+  // Attach drawing overlay (also ensures 'drawings' source/layer exists)
   setupDrawing(map);
 
-  // Your other interactions (only if exported/imported as above)
+  // Your other interactions (only if exported/imported)
   if (typeof initializeLayerInteractions === 'function') {
     initializeLayerInteractions(map);
   }
 
-  // Optional: for console testing
-  window.map = map;
+  window.map = map; // optional for console testing
 });
 
 map.on('error', (e) => console.error('Mapbox error:', e));
-
-console.log('Istanbul Coastline Atlas initialized');
-console.log('Mapbox GL JS version:', mapboxgl.version);
