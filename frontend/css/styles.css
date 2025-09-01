@@ -1,271 +1,221 @@
-* {
-    font-family: 'Hack', monospace;
-    font-weight: 400;
+/* ===== Global ===== */
+html, body { height: 100%; margin: 0; }
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Hack', monospace;
+  font-weight: 400;
+  background: #1a1a1a;
+  color: #111;
 }
 
-body { 
-    margin: 0; 
-    padding: 0; 
-    background: #1a1a1a;
-}
-
-#map { 
-    position: absolute; 
-    top: 60px; 
-    bottom: 0; 
-    width: 100%; 
-    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" stroke="red" stroke-width="1"><line x1="10.5" y1="0.5" x2="10.5" y2="20.5"/><line x1="0.5" y1="10.5" x2="20.5" y2="10.5"/></g></svg>') 10 10, crosshair !important;
-}
-
-#map * {
-    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" stroke="red" stroke-width="1"><line x1="10.5" y1="0.5" x2="10.5" y2="20.5"/><line x1="0.5" y1="10.5" x2="20.5" y2="10.5"/></g></svg>') 10 10, crosshair !important;
-}
-
-/* Header */
+/* ===== Header ===== */
 .header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: rgba(26, 26, 26, 0.95);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #333;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    z-index: 1000;
+  position: fixed;
+  inset: 0 0 auto 0;          /* top:0; left:0; right:0 */
+  height: 60px;
+  background: rgba(26,26,26,0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  z-index: 1000;
 }
 
 .header h1 {
-    color: #fff;
-    margin: 0;
-    font-size: 24px;
-    letter-spacing: 0.5px;
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.5px;
+  color: #fff;
 }
 
-/* Drawing Tool Panel */
-.drawing-panel {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    width: 250px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    transition: transform 0.3s ease;
-    transform: translateX(100%);
+/* ===== Map ===== */
+/* Fill everything below the header */
+#map {
+  position: fixed;
+  top: 60px;      /* matches .header height */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  /* Default cursor: let Mapbox use its own (grab, pointer, etc.) */
+  cursor: auto;
 }
 
-.drawing-panel.open {
-    transform: translateX(0);
+/* Show a red crosshair ONLY when edit mode is ON.
+   Toggle this by adding/removing `edit-on` on <body>. */
+body.edit-on #map,
+body.edit-on #map * {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" stroke="red" stroke-width="1"><line x1="10.5" y1="0.5" x2="10.5" y2="20.5"/><line x1="0.5" y1="10.5" x2="20.5" y2="10.5"/></g></svg>') 10 10, crosshair !important;
 }
 
-.drawing-panel-header {
-    padding: 15px 20px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.drawing-panel-title {
-    font-size: 16px;
-    color: #333;
-    margin: 0;
-}
-
-.close-btn {
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-    color: #666;
-    padding: 0;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.close-btn:hover {
-    color: #333;
-}
-
-.drawing-panel-content {
-    padding: 20px;
-}
-
-.drawing-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.control-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.control-label {
-    font-size: 12px;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.btn {
-    padding: 10px 15px;
-    border: 1px solid #ddd;
-    background: #fff;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 12px;
-    transition: all 0.2s ease;
-}
-
-.btn:hover {
-    background: #f5f5f5;
-    border-color: #999;
-}
-
-.btn.active {
-    background: #333;
-    color: #fff;
-    border-color: #333;
-}
-
-.btn-clear {
-    background: #ff4444;
-    color: #fff;
-    border-color: #ff4444;
-}
-
-.btn-clear:hover {
-    background: #cc3333;
-    border-color: #cc3333;
-}
-
-/* Toggle Button */
+/* ===== Floating UI: Drawing Toggle & Panel ===== */
 .drawing-toggle {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    width: 48px;
-    height: 48px;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    z-index: 1001;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    transition: all 0.3s ease;
+  position: fixed;
+  top: 80px;                /* a bit below the header */
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1001;            /* above header */
 }
 
 .drawing-toggle:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transform: scale(1.06);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
 }
 
-/* Custom Cursor Styles */
-.cursor-crosshair {
-    cursor: crosshair !important;
+.drawing-panel {
+  position: fixed;
+  top: 80px;                /* aligns with toggle */
+  right: 20px;
+  width: 260px;
+  max-width: calc(100vw - 40px);
+  background: rgba(255,255,255,0.96);
+  color: #111;
+  backdrop-filter: blur(10px);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.28);
+  transform: translateX(110%);
+  transition: transform 0.25s ease;
+  z-index: 1001;
 }
 
-.cursor-crosshair * {
-    cursor: crosshair !important;
+.drawing-panel.open { transform: translateX(0); }
+
+.drawing-panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-/* Custom red crosshair cursor */
-.red-crosshair-cursor {
-    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" stroke="red" stroke-width="1"><line x1="10.5" y1="0.5" x2="10.5" y2="20.5"/><line x1="0.5" y1="10.5" x2="20.5" y2="10.5"/></g></svg>') 10 10, crosshair !important;
+.drawing-panel-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #222;
+  letter-spacing: 0.2px;
 }
 
-.red-crosshair-cursor * {
-    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" stroke="red" stroke-width="1"><line x1="10.5" y1="0.5" x2="10.5" y2="20.5"/><line x1="0.5" y1="10.5" x2="20.5" y2="10.5"/></g></svg>') 10 10, crosshair !important;
+.close-btn {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 18px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-/* Popup Styles */
+.close-btn:hover { background: #f2f2f2; color: #111; }
+
+.drawing-panel-content { padding: 16px; }
+
+.drawing-controls { display: grid; gap: 14px; }
+
+.control-group { display: grid; gap: 8px; }
+
+.control-label {
+  font-size: 11px;
+  color: #666;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* Buttons */
+.btn {
+  appearance: none;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #111;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.02s;
+}
+
+.btn:hover { background: #f7f7f7; border-color: #d1d5db; }
+.btn:active { transform: translateY(1px); }
+
+.btn.active {
+  color: #fff;
+  background: #1a73e8;
+  border-color: #1a73e8;
+}
+
+.btn-clear {
+  color: #fff;
+  background: #ff4444;
+  border-color: #ff4444;
+}
+.btn-clear:hover { background: #e13c3c; border-color: #e13c3c; }
+
+/* ===== Mapbox Popups ===== */
 .mapboxgl-popup-content {
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    max-width: 300px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+  padding: 16px;
+  border-radius: 10px;
+  max-width: 320px;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
 .mapboxgl-popup-content:hover {
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
-    transform: translateY(-2px);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35);
 }
-
 .popup-fixed {
-    border: 2px solid #ff0000;
-    background: rgba(255, 255, 255, 0.98);
+  border: 2px solid #ff0000;
+  background: rgba(255,255,255,0.98);
 }
 
-.popup-click-indicator {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 8px;
-    height: 8px;
-    background: #ff0000;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.3; }
-    100% { opacity: 1; }
-}
-
-.popup-header {
-    margin-bottom: 15px;
-}
-
-.popup-title {
-    font-size: 16px;
-    color: #333;
-    margin: 0 0 8px 0;
-}
-
-.popup-subtitle {
-    font-size: 12px;
-    color: #666;
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.popup-header { margin-bottom: 12px; }
+.popup-title   { margin: 0 0 6px 0; font-size: 16px; color: #222; }
+.popup-subtitle{
+  margin: 0; font-size: 11px; color: #666; letter-spacing: 0.4px; text-transform: uppercase;
 }
 
 .popup-image {
-    width: 100%;
-    height: 150px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 4px;
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 12px;
-    text-align: center;
+  width: 100%;
+  height: 150px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+  text-align: center;
 }
 
 .popup-description {
-    font-size: 12px;
-    color: #666;
-    line-height: 1.5;
-    margin: 0;
+  margin: 0;
+  font-size: 12px;
+  color: #555;
+  line-height: 1.5;
+}
+
+/* ===== Responsive tweaks ===== */
+@media (max-width: 480px) {
+  .header h1 { font-size: 18px; }
+  .drawing-toggle { top: 72px; right: 12px; }
+  .drawing-panel { top: 72px; right: 12px; width: calc(100vw - 24px); }
 }
