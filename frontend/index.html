@@ -1,53 +1,36 @@
+<!-- frontend/index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Istanbul Coastline Atlas</title>
-<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-<link href="https://fonts.googleapis.com/css2?family=Hack:wght@400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="frontend/css/styles.css">
-<link rel="stylesheet" href="frontend/css/drawing-overlay.css">
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet">
+  <meta charset="utf-8" />
+  <title>Istanbul Coastline Atlas</title>
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link href="https://fonts.googleapis.com/css2?family=Hack:wght@400&display=swap" rel="stylesheet" />
+  <!-- Local CSS (paths are relative to /frontend/) -->
+  <link rel="stylesheet" href="./css/styles.css" />
+  <link rel="stylesheet" href="./css/drawing-overlay.css" />
+  <!-- Mapbox CSS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet" />
 </head>
+<body>
 
-<!-- Header -->
-<div class="header">
+  <!-- Header -->
+  <div class="header">
     <h1>Istanbul Coastline Atlas</h1>
-</div>
+  </div>
 
-<!-- Map Container -->
-<div id="map"></div>
+  <!-- Map Container (must exist and have height via CSS) -->
+  <div id="map"></div>
 
-<!-- Drawing Toggle Button -->
-<button class="drawing-toggle" id="drawingToggle">✏️</button>
-
-<!-- Drawing Panel -->
-<div class="drawing-panel" id="drawingPanel">
+  <!-- (Optional) Your custom drawer UI – not required for overlay to work -->
+  <button class="drawing-toggle" id="drawingToggle">✏️</button>
+  <div class="drawing-panel" id="drawingPanel">
     <div class="drawing-panel-header">
-        <h3 class="drawing-panel-title">Drawing Tools</h3>
-        <button class="close-btn" id="closePanel">×</button>
+      <h3 class="drawing-panel-title">Drawing Tools</h3>
+      <button class="close-btn" id="closePanel">×</button>
     </div>
     <div class="drawing-panel-content">
-        <div class="drawing-controls">
-            <div class="control-group">
-                <div class="control-label">Drawing Mode</div>
-                <button class="btn" id="drawBtn">Start Drawing</button>
-            </div>
-            <div class="control-group">
-                <div class="control-label">Actions</div>
-                <button class="btn btn-clear" id="clearBtn">Clear All</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Scripts -->
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet" />
-<script src="../config/mapbox.js"></script>
-<script src="js/layer-interactions.js"></script>
-<script src="frontend/js/main.js"></script>
-<script type="module" src="./js/drawing-wire-in.js"></script>
-
-</body>
-</html>
+      <div class="drawing-controls">
+        <div class="control-group">
+          <div class="control-label">Drawing Mode</div>
+          <button class="btn"
