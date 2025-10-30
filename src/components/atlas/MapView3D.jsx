@@ -4,6 +4,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MessageSquare } from 'lucide-react';
 import { Drawing, Contribution, WorkshopMedia } from '@/api/entities';
+import { DrawingOverlay } from '@/utils/DrawingOverlay';
 
 const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiZ29rY2VuZXJraWxpYyIsImEiOiJjbWVtdzR3cHkwd3o1MmtvbGJqYTFqa2s3In0.Mc_XAHqv1rpTz6BuZndegQ";
 const MAPBOX_USERNAME = "gokcenerkilic";
@@ -37,7 +38,7 @@ export default function MapView3D({
   const [contributions, setContributions] = useState([]);
   const [mediaItems, setMediaItems] = useState([]);
   const [selectedContribution, setSelectedContribution] = useState(null);
-  const [hoveredDrawing, setHoveredDrawing] = useState(null);
+  const drawingOverlayRef = useRef(null);
 
   // Get the appropriate style URL based on activeLayer
   const getStyleUrl = () => {
@@ -62,7 +63,9 @@ export default function MapView3D({
     const loadDrawings = async () => {
       try {
         const data = await Drawing.filter({ status: 'approved' });
-        setDrawings(data.filter(drawing => drawing.coordinates && drawing.coordinates.length > 0));
+        const validDrawings = data.filter(drawing => drawing.coordinates && drawing.coordinates.length > 0);
+        console.log('🎨 Loaded drawings:', validDrawings.length, validDrawings);
+        setDrawings(validDrawings);
       } catch (error) {
         console.error('Error loading drawings:', error);
       }
@@ -96,49 +99,286 @@ export default function MapView3D({
     loadWorkshopMedia();
   }, []);
 
-  // Add hover interactions for drawing lines
+  // Add hover interactions for drawing lines (EXACT implementation from main branch using native Mapbox popups)
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || drawings.length === 0) return;
     const map = mapRef.current.getMap();
 
-    const handleMouseMove = (e) => {
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: drawings.map(d => `drawing-layer-${d.id}`)
+    // Wait for map to be fully loaded and layers to be added
+    const initializeHoverEvents = () => {
+      let hoveredFeatureIdLocal = null;
+      let currentLayerId = null;
+      let fixedPopup = null;
+      let isPopupFixed = false;
+
+      // Create a popup instance for hover
+      const popup = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        maxWidth: '300px'
       });
 
-      if (features.length > 0) {
-        map.getCanvas().style.cursor = 'pointer';
-        const feature = features[0];
-        const drawingId = feature.properties.id;
-        const drawing = drawings.find(d => d.id === drawingId);
+    // Helper function to create popup content
+    const createPopupContent = (drawing, isFixed) => {
+      const subtitle = isFixed 
+        ? `${language === 'tr' ? 'Kapatmak için X\'e tıklayın' : 'Click X to close'}` 
+        : `${language === 'tr' ? 'Sabitlemek için tıklayın' : 'Click to pin this popup'}`;
+      const title = isFixed 
+        ? `${drawing.title || 'Drawing'} (${language === 'tr' ? 'Sabitlendi' : 'Pinned'})` 
+        : drawing.title || 'Drawing';
+      
+      return `
+        <div style="padding: 8px;">
+          <div style="margin-bottom: 8px;">
+            <h3 style="font-weight: bold; font-size: 16px; margin: 0 0 4px 0; color: #111827;">
+              ${title}
+            </h3>
+            <p style="font-size: 12px; color: #6b7280; margin: 0;">
+              ${subtitle}
+            </p>
+          </div>
+          ${drawing.description ? `
+            <p style="font-size: 14px; color: #374151; margin: 8px 0;">
+              ${drawing.description}
+            </p>
+          ` : ''}
+          ${drawing.contributor_name && isFixed ? `
+            <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">
+              ${language === 'tr' ? 'Katkıda bulunan' : 'Contributed by'}: ${drawing.contributor_name}
+            </p>
+          ` : ''}
+        </div>
+      `;
+    };
+
+    // Helper function to clear hover state
+    const clearHoverState = () => {
+      if (hoveredFeatureIdLocal !== null && currentLayerId) {
+        try {
+          map.setFeatureState(
+            { source: `drawing-${hoveredFeatureIdLocal}`, id: hoveredFeatureIdLocal },
+            { hover: false }
+          );
+        } catch (e) {
+          console.debug('Feature state not available');
+        }
+      }
+      hoveredFeatureIdLocal = null;
+      currentLayerId = null;
+    };
+
+    drawings.forEach(drawing => {
+      const layerId = `drawing-layer-${drawing.id}`;
+      const sourceId = `drawing-${drawing.id}`;
+
+      // Update layer paint properties for hover effects using feature-state
+      try {
+        map.setPaintProperty(layerId, 'line-color', [
+          'case',
+          ['boolean', ['feature-state', 'hover'], false],
+          '#ff0000', // Highlight color (bright red)
+          drawing.style?.color || '#ff6b6b' // Original color
+        ]);
+
+        map.setPaintProperty(layerId, 'line-width', [
+          'case',
+          ['boolean', ['feature-state', 'hover'], false],
+          5, // Highlight width
+          drawing.style?.weight || 3 // Original width
+        ]);
+      } catch (e) {
+        console.debug('Could not set feature-state paint properties');
+      }
+
+      // Mouse enter: highlight the feature and show popup
+      const handleMouseEnter = (e) => {
+        console.log('🖱️ Mouse entered layer:', layerId, e);
         
-        if (drawing && !hoveredDrawing) {
-          setHoveredDrawing({
-            drawing,
-            lngLat: e.lngLat
-          });
+        // Don't show hover popup if there's already a fixed popup
+        if (isPopupFixed) {
+          console.log('  ⏸️ Popup already fixed, skipping hover');
+          return;
         }
-      } else {
+
+        if (e.features && e.features.length > 0) {
+          console.log('  ✅ Feature detected, showing popup');
+          map.getCanvas().style.cursor = 'pointer';
+          
+          // Clear previous hover state
+          clearHoverState();
+
+          // Set new hover state
+          hoveredFeatureIdLocal = drawing.id;
+          currentLayerId = layerId;
+
+          try {
+            map.setFeatureState(
+              { source: sourceId, id: hoveredFeatureIdLocal },
+              { hover: true }
+            );
+          } catch (e) {
+            console.debug('Feature state not available');
+          }
+
+          // Show popup
+          const coordinates = e.lngLat;
+          const popupContent = createPopupContent(drawing, false);
+          
+          popup.setLngLat(coordinates)
+            .setHTML(popupContent)
+            .addTo(map);
+          
+          console.log('  📍 Popup added at:', coordinates);
+        } else {
+          console.log('  ❌ No features found');
+        }
+      };
+
+      // Mouse leave: remove highlight and popup (only if not fixed)
+      const handleMouseLeave = () => {
+        // Don't remove popup if it's fixed
+        if (isPopupFixed) return;
+
         map.getCanvas().style.cursor = '';
-        if (hoveredDrawing) {
-          setHoveredDrawing(null);
+        
+        // Remove hover state
+        clearHoverState();
+
+        // Remove popup
+        popup.remove();
+      };
+
+      // Click on layer: fix the popup
+      const handleClick = (e) => {
+        if (e.features.length > 0) {
+          // Remove any existing fixed popup
+          if (fixedPopup) {
+            fixedPopup.remove();
+          }
+
+          // Create a new fixed popup
+          const coordinates = e.lngLat;
+          const fixedPopupContent = createPopupContent(drawing, true);
+
+          fixedPopup = new mapboxgl.Popup({
+            closeButton: true,
+            closeOnClick: false,
+            maxWidth: '300px'
+          })
+          .setLngLat(coordinates)
+          .setHTML(fixedPopupContent)
+          .addTo(map);
+
+          // Add fixed popup styling
+          fixedPopup.on('open', () => {
+            const popupElement = fixedPopup.getElement();
+            if (popupElement) {
+              popupElement.querySelector('.mapboxgl-popup-content').classList.add('popup-fixed');
+            }
+          });
+
+          // Handle fixed popup close
+          fixedPopup.on('close', () => {
+            isPopupFixed = false;
+            fixedPopup = null;
+          });
+
+          isPopupFixed = true;
+
+          // Remove the hover popup if it exists
+          popup.remove();
         }
+      };
+
+        // Attach event listeners
+        map.on('mouseenter', layerId, handleMouseEnter);
+        map.on('mouseleave', layerId, handleMouseLeave);
+        map.on('click', layerId, handleClick);
+      });
+
+      // Return cleanup function
+      return () => {
+        drawings.forEach(drawing => {
+          const layerId = `drawing-layer-${drawing.id}`;
+          map.off('mouseenter', layerId);
+          map.off('mouseleave', layerId);
+          map.off('click', layerId);
+        });
+        clearHoverState();
+        popup.remove();
+        if (fixedPopup) {
+          fixedPopup.remove();
+        }
+      };
+    }; // End of initializeHoverEvents
+
+    // Wait for layers to be added, then initialize events
+    const checkLayersAndInit = () => {
+      console.log('🔍 Checking for drawing layers...', drawings.length);
+      
+      const layerStatus = drawings.map(drawing => {
+        const layerId = `drawing-layer-${drawing.id}`;
+        const exists = map.getLayer(layerId);
+        console.log(`  Layer ${layerId}: ${exists ? '✅ exists' : '❌ missing'}`);
+        return exists;
+      });
+      
+      const allLayersExist = layerStatus.every(exists => exists);
+
+      if (allLayersExist) {
+        console.log('✅ All layers exist! Initializing hover events...');
+        return initializeHoverEvents();
+      } else {
+        console.log('⏳ Waiting for layers to be added...');
+        // Retry after a short delay
+        const timeout = setTimeout(checkLayersAndInit, 100);
+        return () => clearTimeout(timeout);
       }
     };
 
-    const handleMouseLeave = () => {
-      map.getCanvas().style.cursor = '';
-      setHoveredDrawing(null);
-    };
+    const cleanup = checkLayersAndInit();
+    return cleanup;
+  }, [drawings, language]);
 
-    map.on('mousemove', handleMouseMove);
-    map.on('mouseleave', handleMouseLeave);
+  // Initialize DrawingOverlay
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current.getMap();
+    const container = map.getContainer();
+
+    // Initialize drawing overlay with coordinate conversion
+    if (!drawingOverlayRef.current) {
+      drawingOverlayRef.current = new DrawingOverlay(container, {
+        toolbar: true,
+        strokeWidth: 3,
+        strokeStyle: '#ff6b6b',
+        simplifyTolerance: 2,
+        toLngLat: (pt) => {
+          // Convert screen pixels to lng/lat
+          const lngLat = map.unproject([pt.x, pt.y]);
+          return { lng: lngLat.lng, lat: lngLat.lat };
+        },
+        fromLngLat: (ll) => {
+          // Convert lng/lat to screen pixels
+          const point = map.project([ll.lng, ll.lat]);
+          return { x: point.x, y: point.y };
+        },
+        onSave: async (payload) => {
+          console.log('Drawing saved:', payload);
+          // Here you can save to your backend/database
+          // For now, just log it
+          alert(`Drawing saved! ${payload.geojson.features.length} paths`);
+        }
+      });
+    }
 
     return () => {
-      map.off('mousemove', handleMouseMove);
-      map.off('mouseleave', handleMouseLeave);
+      if (drawingOverlayRef.current) {
+        drawingOverlayRef.current.destroy();
+        drawingOverlayRef.current = null;
+      }
     };
-  }, [drawings, hoveredDrawing]);
+  }, []);
 
   // Enable 3D terrain and buildings when map loads
   useEffect(() => {
@@ -463,32 +703,6 @@ export default function MapView3D({
           </Marker>
         ))}
         
-        {/* Hover Popup for Drawing Lines */}
-        {hoveredDrawing && (
-          <Popup
-            longitude={hoveredDrawing.lngLat.lng}
-            latitude={hoveredDrawing.lngLat.lat}
-            anchor="bottom"
-            onClose={() => setHoveredDrawing(null)}
-            closeButton={false}
-            closeOnClick={false}
-            maxWidth="300px"
-          >
-            <div className="p-2 min-w-[200px]">
-              <h3 className="font-bold text-base text-gray-900 mb-1">
-                {hoveredDrawing.drawing.title || 'Drawing'}
-              </h3>
-              {hoveredDrawing.drawing.description && (
-                <p className="text-sm text-gray-600">
-                  {hoveredDrawing.drawing.description}
-                </p>
-              )}
-              <p className="text-xs text-gray-400 mt-2">
-                {language === 'tr' ? 'Detaylar için tıklayın' : 'Click for details'}
-              </p>
-            </div>
-          </Popup>
-        )}
       </Map>
 
       {/* 3D Controls Overlay */}

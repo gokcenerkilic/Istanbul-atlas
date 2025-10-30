@@ -26,6 +26,7 @@ import TextBoxMarkers from "../components/atlas/TextBoxMarkers";
 import TextBoxPicker from "../components/atlas/TextBoxPicker";
 import TextBoxToggle from "../components/atlas/TextBoxToggle";
 import MapView3D from "../components/atlas/MapView3D";
+import MapView2D from "../components/atlas/MapView2D";
 
 // --- Mapbox Configuration Updated & Refined ---
 const MAPBOX_USERNAME = "gokcenerkilic";
@@ -205,57 +206,16 @@ export default function Atlas() {
 
       {/* Map Container - Conditional Rendering for 2D/3D */}
       {!is3DView ? (
-        <MapContainer
+        <MapView2D 
           center={mapCenter}
           zoom={mapZoom}
-          style={{ width: '100%', height: '100%' }}
-          zoomControl={false}
-          className="z-10 bg-gray-700" // Added a background color for when tiles don't load
-        >
-          {/* Mapbox Tile Layers */}
-          {activeLayer === 'satellite' && (
-            <TileLayer
-              url="https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token={accessToken}"
-              attribution='&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>'
-              accessToken={MAPBOX_ACCESS_TOKEN}
-              tileSize={512}
-              zoomOffset={-1}
-            />
-          )}
-          {activeLayer === 'custom_atlas' && (
-             <TileLayer
-              url={`https://api.mapbox.com/styles/v1/${MAPBOX_USERNAME}/${MAPBOX_STYLE_ID}/tiles/{z}/{x}/{y}?access_token={accessToken}`}
-              attribution='&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a>'
-              accessToken={MAPBOX_ACCESS_TOKEN}
-              tileSize={512}
-              zoomOffset={-1}
-            />
-          )}
-
-          {/* Interactive Map Layers */}
-          <InteractiveMapLayers language={language} />
-
-          {/* Map Components */}
-          <ContributionMarkers language={language} onMarkerClick={setSelectedMedia} />
-          <DrawingLayer language={language} />
-          <WorkshopMediaMarkers language={language} onMediaClick={setSelectedMedia} />
-          {showTextBoxes && <TextBoxMarkers textBoxes={textBoxes} onTextBoxClick={handleTextBoxClick} onDeleteTextBox={handleDeleteTextBox} language={language} />}
-          {isLocationMode && <LocationPicker onLocationSelect={handleLocationSelect} />}
-          {isTextBoxMode && <TextBoxPicker onLocationSelect={handleTextBoxLocationSelect} />}
-          
-          {/* Drawing Canvas - active when drawing tools panel is open */}
-          <DrawingCanvas 
-            isDrawingMode={isDrawingMode}
-            onDrawingComplete={handleDrawingComplete}
-            drawingStyle={{
-              color: '#ff6b6b',
-              weight: 3,
-              opacity: 0.8
-            }}
-            completedPaths={currentDrawings}
-            onPathsUpdate={setCurrentDrawings}
-          />
-        </MapContainer>
+          activeLayer={activeLayer}
+          language={language}
+          textBoxes={textBoxes}
+          showTextBoxes={showTextBoxes}
+          onTextBoxClick={handleTextBoxClick}
+          onDeleteTextBox={handleDeleteTextBox}
+        />
       ) : (
         <MapView3D 
           center={mapCenter}
