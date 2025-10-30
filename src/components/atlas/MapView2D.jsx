@@ -37,6 +37,7 @@ export default function MapView2D({
     zoom: zoom
   });
   const [selectedTextBox, setSelectedTextBox] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   // Get the appropriate style URL based on activeLayer
   const getStyleUrl = () => {
@@ -56,10 +57,21 @@ export default function MapView2D({
     }));
   }, [center, zoom]);
 
+  // Handler for when map loads
+  const handleMapLoad = (event) => {
+    console.log('🗺️ Map onLoad event fired!');
+    setMapLoaded(true);
+  };
+
   // Add hover interactions for district layers
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !mapLoaded) {
+      console.log('⏳ Waiting for map to load...', { hasRef: !!mapRef.current, mapLoaded });
+      return;
+    }
+    
     const map = mapRef.current.getMap();
+    console.log('🚀 MapView2D useEffect triggered - setting up hover interactions');
 
     let hoveredFeatureId = null;
     let currentLayer = null;
@@ -73,13 +85,14 @@ export default function MapView2D({
       maxWidth: '300px'
     });
 
-    // Helper function to create popup content
+    // Helper function to create popup content (uses current language prop)
     const createPopupContent = (layerConfig, isFixed) => {
+      const currentLang = language || 'en'; // Fallback to English
       const subtitle = isFixed 
-        ? `${language === 'tr' ? 'Kapatmak için X\'e tıklayın' : 'Click X to close'}` 
-        : `${language === 'tr' ? 'Sabitlemek için tıklayın' : 'Click to pin this popup'}`;
+        ? `${currentLang === 'tr' ? 'Kapatmak için X\'e tıklayın' : 'Click X to close'}` 
+        : `${currentLang === 'tr' ? 'Sabitlemek için tıklayın' : 'Click to pin this popup'}`;
       const title = isFixed 
-        ? `${layerConfig.name} (${language === 'tr' ? 'Sabitlendi' : 'Pinned'})` 
+        ? `${layerConfig.name} (${currentLang === 'tr' ? 'Sabitlendi' : 'Pinned'})` 
         : layerConfig.name;
       
       return `
@@ -301,7 +314,7 @@ export default function MapView2D({
         fixedPopup.remove();
       }
     };
-  }, [language]);
+  }, [mapLoaded]); // Run when map loads
 
   const translations = {
     tr: {
@@ -337,6 +350,7 @@ export default function MapView2D({
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onLoad={handleMapLoad}
         mapStyle={getStyleUrl()}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
         style={{ width: '100%', height: '100%' }}
