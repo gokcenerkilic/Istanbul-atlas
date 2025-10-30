@@ -21,8 +21,7 @@ export default function MapControls({
       layers: "Katmanlar",
       upload: "Yükleme",
       search: "Arama",
-      textBox: "Metin Kutusu",
-      view3D: "3D Görünüm"
+      textBox: "Metin Kutusu"
     },
     en: {
       contribute: "Contribute",
@@ -31,8 +30,7 @@ export default function MapControls({
       layers: "Layers",
       upload: "Upload",
       search: "Search",
-      textBox: "Text Box",
-      view3D: "3D View"
+      textBox: "Text Box"
     }
   };
 
@@ -60,7 +58,7 @@ export default function MapControls({
       initial={{ x: -100, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="absolute left-6 top-[40%] transform -translate-y-1/2 z-40"
+      className="absolute left-6 top-1/2 transform -translate-y-1/2 z-40"
     >
       <div className="bg-white/90 backdrop-blur-sm rounded-xl p-2 shadow-2xl border border-white/20">
         <div className="flex flex-col gap-2">
@@ -80,21 +78,6 @@ export default function MapControls({
               <control.icon className="w-6 h-6" />
             </Button>
           ))}
-          
-          {/* 3D View Toggle Button - Integrated */}
-          <Button
-            variant="ghost"
-            size="lg"
-            className={`w-14 h-14 rounded-xl transition-all duration-200 ${
-              is3DView 
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg scale-105' 
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-            onClick={() => setIs3DView(!is3DView)}
-            title={t.view3D}
-          >
-            <Box className="w-6 h-6" />
-          </Button>
         </div>
       </div>
     </motion.div>
