@@ -1,120 +1,44 @@
-import { Entity, Auth } from '@base44/sdk';
+import { base44 } from './base44Client';
 
-// Initialize Base44 entities with proper schemas
+// Base44 entities are accessed through the client
+// The client provides: base44.entities.EntityName.method()
 
-// Contribution Entity - User submitted media with location
-export const Contribution = new Entity('contributions', {
-  schema: {
-    contributionId: { type: 'string', required: true }, // Format: CONT-001, CONT-002, etc.
-    type: { type: 'string', required: true }, // 'photo', 'video', 'audio'
-    title: { type: 'string', required: true },
-    description: { type: 'string' },
-    contributor_name: { type: 'string', required: true },
-    contributor_email: { type: 'string' },
-    location: {
-      type: 'object',
-      properties: {
-        lat: { type: 'number', required: true },
-        lng: { type: 'number', required: true }
-      }
-    },
-    media_url: { type: 'string', required: true },
-    thumbnail_url: { type: 'string' },
-    status: { type: 'string', default: 'pending' }, // 'pending', 'approved', 'rejected'
-    created_date: { type: 'date', default: () => new Date() },
-    approved_date: { type: 'date' }
+// Helper to get entity with fallback
+const getEntity = (entityName) => {
+  if (base44.entities && base44.entities[entityName]) {
+    return base44.entities[entityName];
   }
-});
+  // Return mock entity if not available
+  return {
+    list: () => Promise.resolve([]),
+    filter: () => Promise.resolve([]),
+    get: () => Promise.resolve(null),
+    create: (data) => Promise.resolve({ _id: Date.now().toString(), ...data }),
+    update: (id, data) => Promise.resolve({ _id: id, ...data }),
+    delete: () => Promise.resolve({ success: true })
+  };
+};
 
-// Drawing Entity - User drawn polygons/lines on map
-export const Drawing = new Entity('drawings', {
-  schema: {
-    drawingId: { type: 'string', required: true }, // Format: DRW-001, DRW-002, etc.
-    title: { type: 'string' },
-    description: { type: 'string' },
-    contributor_name: { type: 'string' },
-    coordinates: { 
-      type: 'array', 
-      required: true,
-      items: {
-        type: 'object',
-        properties: {
-          lat: { type: 'number' },
-          lng: { type: 'number' }
-        }
-      }
-    },
-    style: {
-      type: 'object',
-      properties: {
-        color: { type: 'string', default: '#ff6b6b' },
-        weight: { type: 'number', default: 3 },
-        opacity: { type: 'number', default: 0.8 }
-      }
-    },
-    status: { type: 'string', default: 'pending' }, // 'pending', 'approved', 'rejected'
-    created_date: { type: 'date', default: () => new Date() },
-    approved_date: { type: 'date' }
-  }
-});
+// Export entity accessors
+// Note: Entity schemas should be defined in Base44 dashboard
+export const Contribution = getEntity('contributions');
+export const Drawing = getEntity('drawings');
+export const TextBox = getEntity('textboxes');
+export const WorkshopMedia = getEntity('workshop_media');
 
-// TextBox Entity - Text annotations on map
-export const TextBox = new Entity('textboxes', {
-  schema: {
-    textBoxId: { type: 'string', required: true }, // Format: TXT-001, TXT-002, etc.
-    content: { type: 'string', required: true },
-    contributor_name: { type: 'string' },
-    coords: {
-      type: 'object',
-      required: true,
-      properties: {
-        lat: { type: 'number', required: true },
-        lng: { type: 'number', required: true }
-      }
-    },
-    style: {
-      type: 'object',
-      properties: {
-        fontSize: { type: 'string', default: '14px' },
-        color: { type: 'string', default: '#000000' },
-        backgroundColor: { type: 'string', default: '#ffffff' }
-      }
-    },
-    status: { type: 'string', default: 'pending' }, // 'pending', 'approved', 'rejected'
-    created_date: { type: 'date', default: () => new Date() },
-    approved_date: { type: 'date' }
-  }
-});
-
-// WorkshopMedia Entity - Pre-loaded workshop media
-export const WorkshopMedia = new Entity('workshop_media', {
-  schema: {
-    mediaId: { type: 'string', required: true },
-    type: { type: 'string', required: true },
-    title: { type: 'string', required: true },
-    description: { type: 'string' },
-    location: {
-      type: 'object',
-      properties: {
-        lat: { type: 'number', required: true },
-        lng: { type: 'number', required: true }
-      }
-    },
-    media_url: { type: 'string', required: true },
-    thumbnail_url: { type: 'string' },
-    created_date: { type: 'date', default: () => new Date() }
-  }
-});
-
-// Auth functions
+// Auth functions using Base44 client
 export const User = {
-  currentUser: () => Auth.currentUser(),
-  signIn: (credentials) => Auth.signIn(credentials),
-  signOut: () => Auth.signOut(),
-  isAuthenticated: () => Auth.isAuthenticated(),
+  currentUser: () => base44.auth.me(),
+  signIn: (returnPath) => base44.auth.login(returnPath),
+  signOut: () => base44.auth.logout(),
+  isAuthenticated: () => base44.auth.isAuthenticated(),
   isAdmin: async () => {
-    const user = await Auth.currentUser();
-    return user?.role === 'admin' || user?.email?.includes('admin');
+    try {
+      const user = await base44.auth.me();
+      return user?.role === 'admin' || user?.email?.includes('admin');
+    } catch {
+      return false;
+    }
   }
 };
 
