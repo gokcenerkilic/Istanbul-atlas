@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { MapPin, Edit3, Camera, Layers, Upload, Search, MessageSquare, Box } from "lucide-react";
+import { MapPin, Edit3, Camera, Layers, Upload, Search, MessageSquare, Box, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function MapControls({ 
@@ -11,7 +11,8 @@ export default function MapControls({
   setIsDrawingMode,
   language,
   is3DView,
-  setIs3DView
+  setIs3DView,
+  onAdminClick
 }) {
   const translations = {
     tr: {
@@ -22,7 +23,8 @@ export default function MapControls({
       upload: "Yükleme",
       search: "Arama",
       textBox: "Metin Kutusu",
-      view3D: "3D Görünüm"
+      view3D: "3D Görünüm",
+      admin: "Yönetim"
     },
     en: {
       contribute: "Contribute",
@@ -32,7 +34,8 @@ export default function MapControls({
       upload: "Upload",
       search: "Search",
       textBox: "Text Box",
-      view3D: "3D View"
+      view3D: "3D View",
+      admin: "Admin"
     }
   };
 
@@ -95,6 +98,19 @@ export default function MapControls({
           >
             <Box className="w-6 h-6" />
           </Button>
+          
+          {/* Admin Button */}
+          {onAdminClick && (
+            <Button
+              variant="ghost"
+              size="lg"
+              className="w-14 h-14 rounded-xl transition-all duration-200 text-gray-700 hover:bg-red-50 hover:text-red-600"
+              onClick={onAdminClick}
+              title={t.admin}
+            >
+              <Shield className="w-6 h-6" />
+            </Button>
+          )}
         </div>
       </div>
     </motion.div>

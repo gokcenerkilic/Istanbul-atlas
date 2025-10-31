@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, MessageSquare, Save, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { TextBox, generateSequentialId } from "@/api/entities";
 
 export default function TextBoxPanel({
   isOpen,
@@ -59,22 +60,52 @@ export default function TextBoxPanel({
 
   const t = translations[language];
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (selectedCoords && (title || content)) {
-      onSaveTextBox({
-        id: Date.now().toString(),
-        title: title || "Untitled",
-        content,
-        coords: selectedCoords,
-        timestamp: new Date().toISOString(),
-      });
-      
-      // Reset form
-      setTitle('');
-      setContent('');
-      setSelectedCoords(null);
-      setIsLocationMode(false);
-      onClose();
+      try {
+        // Generate sequential ID
+        const textBoxId = await generateSequentialId(TextBox, 'TXT');
+        
+        // Save to database
+        const savedTextBox = await TextBox.create({
+          textBoxId,
+          content: content || title,
+          contributor_name: 'Anonymous',
+          coords: {
+            lat: selectedCoords.lat,
+            lng: selectedCoords.lng
+          },
+          style: {
+            fontSize: '14px',
+            color: '#000000',
+            backgroundColor: '#ffffff'
+          },
+          status: 'pending',
+          created_date: new Date()
+        });
+        
+        console.log(`✅ TextBox saved with ID: ${textBoxId}`);
+        
+        // Call parent callback with the saved textbox (including database ID)
+        onSaveTextBox({
+          id: savedTextBox._id,
+          textBoxId,
+          title: title || "Untitled",
+          content,
+          coords: selectedCoords,
+          timestamp: new Date().toISOString(),
+        });
+        
+        // Reset form
+        setTitle('');
+        setContent('');
+        setSelectedCoords(null);
+        setIsLocationMode(false);
+        onClose();
+      } catch (error) {
+        console.error('Error saving text box:', error);
+        alert('Error saving text box. Please try again.');
+      }
     }
   };
 

@@ -27,6 +27,8 @@ import TextBoxPicker from "../components/atlas/TextBoxPicker";
 import TextBoxToggle from "../components/atlas/TextBoxToggle";
 import MapView3D from "../components/atlas/MapView3D";
 import MapView2D from "../components/atlas/MapView2D";
+import AdminManagementPanel from "../components/atlas/AdminManagementPanel";
+import { Drawing, TextBox, generateSequentialId, User } from "../api/entities";
 
 // --- Mapbox Configuration Updated & Refined ---
 const MAPBOX_USERNAME = "gokcenerkilic";
@@ -60,6 +62,7 @@ export default function Atlas() {
   const [textBoxCoords, setTextBoxCoords] = useState(null);
   const [showTextBoxes, setShowTextBoxes] = useState(true);
   const [is3DView, setIs3DView] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   const translations = {
     tr: {
@@ -107,13 +110,43 @@ export default function Atlas() {
     setIsLocationMode(false);
   };
 
-  const handleDrawingComplete = useCallback((pathCoordinates) => {
-    // This will be handled by the DrawingTools component, but Atlas needs to store the data
-    // to pass to DrawingTools and for display.
+  const handleDrawingComplete = useCallback(async (pathCoordinates) => {
     console.log('Drawing completed:', pathCoordinates);
-    setCurrentDrawings(prev => [...prev, pathCoordinates]); // Add the new drawing to state
-    setIsDrawingMode(false); // Exit drawing mode after drawing is complete
-    setActivePanel(null); // Close the drawing panel
+    
+    try {
+      // Generate sequential ID for the drawing
+      const drawingId = await generateSequentialId(Drawing, 'DRW');
+      
+      // Save drawing to database
+      await Drawing.create({
+        drawingId,
+        title: `Drawing ${drawingId}`,
+        description: '',
+        contributor_name: 'Anonymous',
+        coordinates: pathCoordinates.map(coord => ({
+          lat: coord.lat,
+          lng: coord.lng
+        })),
+        style: {
+          color: '#ff6b6b',
+          weight: 3,
+          opacity: 0.8
+        },
+        status: 'pending',
+        created_date: new Date()
+      });
+      
+      console.log(`✅ Drawing saved with ID: ${drawingId}`);
+      
+      // Add to local state for immediate display
+      setCurrentDrawings(prev => [...prev, pathCoordinates]);
+    } catch (error) {
+      console.error('Error saving drawing:', error);
+      alert('Error saving drawing. Please try again.');
+    }
+    
+    setIsDrawingMode(false);
+    setActivePanel(null);
   }, []);
 
   const handleClearDrawings = useCallback(() => {
@@ -240,6 +273,7 @@ export default function Atlas() {
         language={language}
         is3DView={is3DView}
         setIs3DView={setIs3DView}
+        onAdminClick={() => setShowAdminPanel(true)}
       />
 
       {/* Side Panels */}
@@ -332,6 +366,14 @@ export default function Atlas() {
       )}
       
       <UIScaleControl scale={uiScale} setScale={setUiScale} language={language} />
+      
+      {/* Admin Management Panel */}
+      {showAdminPanel && (
+        <AdminManagementPanel
+          language={language}
+          onClose={() => setShowAdminPanel(false)}
+        />
+      )}
     </div>
   );
 }

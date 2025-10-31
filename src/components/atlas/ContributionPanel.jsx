@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, MapPin, Send, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Contribution } from "@/api/entities";
+import { Contribution, generateSequentialId } from "@/api/entities";
 
 export default function ContributionPanel({
   isOpen,
@@ -96,11 +96,23 @@ export default function ContributionPanel({
 
     setIsSubmitting(true);
     try {
+      // Generate sequential ID
+      const contributionId = await generateSequentialId(Contribution, 'CONT');
+      
       await Contribution.create({
-        ...formData,
-        latitude: parseFloat(formData.latitude),
-        longitude: parseFloat(formData.longitude),
-        language
+        contributionId,
+        type: 'observation', // or formData.category
+        title: formData.title,
+        description: formData.description,
+        contributor_name: formData.contributor_name,
+        contributor_email: formData.contributor_email,
+        location: {
+          lat: parseFloat(formData.latitude),
+          lng: parseFloat(formData.longitude)
+        },
+        media_url: '', // Will be populated when file upload is added
+        status: 'pending',
+        created_date: new Date()
       });
       // Reset form data after successful submission
       setFormData({
