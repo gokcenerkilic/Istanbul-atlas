@@ -21,6 +21,20 @@ if (appId) {
     token,
     autoInitAuth: true
   });
+  
+  // Log available entities after a short delay
+  setTimeout(() => {
+    if (base44Client.entities) {
+      const entityNames = Object.keys(base44Client.entities);
+      console.log('📦 Available Base44 entities:', entityNames);
+      if (entityNames.length === 0) {
+        console.warn('⚠️ No entities found! Create entities in Base44 dashboard:');
+        console.warn('   https://istanbul-coastline-atlas-4b27e368.base44.app');
+      }
+    } else {
+      console.warn('⚠️ base44.entities is undefined');
+    }
+  }, 1000);
 } else {
   // Development mode: Use mock client
   console.warn('⚠️ Base44 App ID not found. Using mock mode.');

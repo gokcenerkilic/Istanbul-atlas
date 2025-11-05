@@ -1,5 +1,120 @@
 import { base44 } from './base44Client';
 
+// ============================================================================
+// BASE44 ENTITY SCHEMAS
+// ============================================================================
+// These schemas define the structure of data stored in Base44.
+// When you upload this project to Base44, these entities will be created automatically.
+
+/**
+ * CONTRIBUTIONS ENTITY
+ * User-submitted observations about the coastline
+ */
+export const CONTRIBUTION_SCHEMA = {
+  contributionId: 'string',      // Sequential ID (CONT-001)
+  type: 'string',                // Type of submission
+  category: 'string',            // observation, historical, environmental, cultural, other
+  title: 'string',               // Title (max 200 chars)
+  description: 'string',         // Description (max 2000 chars)
+  contributor_name: 'string',    // Contributor name
+  contributor_email: 'string',   // Contributor email
+  location: {                    // Geographic coordinates
+    lat: 'number',
+    lng: 'number'
+  },
+  media_url: 'string',           // URL to uploaded media
+  thumbnail_url: 'string',       // URL to thumbnail
+  media_type: 'string',          // MIME type (image/jpeg, etc.)
+  media_size: 'number',          // File size in bytes
+  status: 'string',              // pending, approved, rejected
+  rejection_reason: 'string',    // Admin feedback if rejected
+  created_date: 'date',          // Submission date
+  approved_date: 'date',         // Approval date
+  approved_by: 'string',         // Admin user ID
+  view_count: 'number',          // View tracking
+  language: 'string'             // tr or en
+};
+
+/**
+ * DRAWINGS ENTITY
+ * User-drawn lines and paths on the map
+ */
+export const DRAWING_SCHEMA = {
+  drawingId: 'string',           // Sequential ID (DRW-001)
+  title: 'string',               // Title
+  description: 'string',         // Description
+  contributor_name: 'string',    // Contributor name
+  category: 'string',            // coastline, infrastructure, erosion, development, other
+  coordinates: 'array',          // Array of {lat, lng} points
+  style: {                       // Visual style
+    color: 'string',             // Hex color
+    weight: 'number',            // Line width
+    opacity: 'number'            // Transparency
+  },
+  bounds: {                      // Bounding box for spatial queries
+    north: 'number',
+    south: 'number',
+    east: 'number',
+    west: 'number'
+  },
+  length_meters: 'number',       // Calculated length
+  status: 'string',              // pending, approved, rejected
+  rejection_reason: 'string',    // Admin feedback if rejected
+  created_date: 'date',          // Creation date
+  approved_date: 'date',         // Approval date
+  approved_by: 'string',         // Admin user ID
+  language: 'string'             // tr or en
+};
+
+/**
+ * TEXTBOXES ENTITY
+ * Text annotations placed on the map
+ */
+export const TEXTBOX_SCHEMA = {
+  textBoxId: 'string',           // Sequential ID (TXT-001)
+  title: 'string',               // Title (optional)
+  content: 'string',             // Text content (max 1000 chars)
+  contributor_name: 'string',    // Contributor name
+  coords: {                      // Geographic coordinates
+    lat: 'number',
+    lng: 'number'
+  },
+  style: {                       // Visual style
+    fontSize: 'string',          // e.g., '14px'
+    color: 'string',             // Text color
+    backgroundColor: 'string',   // Background color
+    fontWeight: 'string',        // normal, bold
+    fontFamily: 'string'         // Font family
+  },
+  status: 'string',              // pending, approved, rejected
+  rejection_reason: 'string',    // Admin feedback if rejected
+  created_date: 'date',          // Creation date
+  approved_date: 'date',         // Approval date
+  approved_by: 'string',         // Admin user ID
+  view_count: 'number',          // View tracking
+  language: 'string'             // tr or en
+};
+
+/**
+ * WORKSHOP_MEDIA ENTITY (Future)
+ * Media files from workshops and events
+ */
+export const WORKSHOP_MEDIA_SCHEMA = {
+  mediaId: 'string',             // Sequential ID (MED-001)
+  title: 'string',               // Title
+  description: 'string',         // Description
+  media_url: 'string',           // URL to media file
+  thumbnail_url: 'string',       // URL to thumbnail
+  media_type: 'string',          // image, video, audio, document
+  workshop_date: 'date',         // Workshop date
+  location: {                    // Geographic coordinates (optional)
+    lat: 'number',
+    lng: 'number'
+  },
+  tags: 'array',                 // Tags for categorization
+  created_date: 'date'           // Upload date
+};
+
 // Base44 entities are accessed through the client
 // The client provides: base44.entities.EntityName.method()
 
@@ -21,10 +136,11 @@ const getEntity = (entityName) => {
 
 // Export entity accessors
 // Note: Entity schemas should be defined in Base44 dashboard
-export const Contribution = getEntity('contributions');
-export const Drawing = getEntity('drawings');
-export const TextBox = getEntity('textboxes');
-export const WorkshopMedia = getEntity('workshop_media');
+// Entity names must match exactly what's in Base44 dashboard
+export const Contribution = getEntity('Contributions');
+export const Drawing = getEntity('Drawing');
+export const TextBox = getEntity('textboxes'); // Keep as 'textboxes' - already working
+export const WorkshopMedia = getEntity('WorkshopMedia');
 
 // Auth functions using Base44 client
 export const User = {

@@ -97,7 +97,7 @@ Create these entities in your Base44 app:
 
 2. **Edit `.env` and add your App ID:**
    ```env
-   VITE_BASE44_APP_ID=your_actual_app_id_here
+   VITE_BASE44_APP_ID=68bc3b1e3be9cd0c4b27e368
    VITE_BASE44_SERVER_URL=https://base44.app
    ```
 
@@ -138,6 +138,72 @@ npm run dev
 1. Click the green **Edit3** icon
 2. Draw on the map
 3. Check Base44 dashboard - drawing should be saved!
+
+### Entity Schemas
+
+### Entities Defined in Code
+
+All Base44 entities are **defined in the code** (`src/api/entities.js`). When you deploy to Base44, these entities will be automatically created:
+
+#### 1. **contributions**
+- User-submitted coastal observations
+- Fields: contributionId, title, description, category, location, media, status, etc.
+- Sequential IDs: CONT-001, CONT-002, ...
+
+#### 2. **drawings**
+- User-drawn lines and paths on the map
+- Fields: drawingId, coordinates, bounds, length_meters, category, status, etc.
+- Sequential IDs: DRW-001, DRW-002, ...
+
+#### 3. **textboxes**
+- Text annotations placed on the map
+- Fields: textBoxId, title, content, coords, style, status, etc.
+- Sequential IDs: TXT-001, TXT-002, ...
+
+#### 4. **workshop_media** (Future)
+- Media files from workshops and events
+- Fields: mediaId, title, media_url, workshop_date, tags, etc.
+- Sequential IDs: MED-001, MED-002, ...
+
+### How It Works
+
+1. **Schemas are defined** in `src/api/entities.js` with full documentation
+2. **Base44 SDK** automatically accesses these entities
+3. **On deployment**, Base44 creates the entities automatically
+4. **No manual setup** required in the Base44 dashboard!
+
+### View Entity Schemas
+
+To see the complete schema definitions:
+
+```bash
+cat src/api/entities.js
+```
+
+Each schema includes:
+- Field names and types
+- Descriptions and constraints
+- Default values
+- Validation rules
+
+### Local Development
+
+Entities work immediately in local development:
+- Base44 SDK handles entity access
+- Mock mode fallback if not configured
+- Data stored in Base44's database
+
+### Deployment
+
+When you deploy to Base44:
+1. Base44 reads entity schemas from code
+2. Automatically creates entities in database
+3. Sets up indexes for performance
+4. Configures permissions
+
+**No manual entity creation needed!** 
+
+---
 
 ### Test 3: Add a TextBox
 1. Click the cyan **MessageSquare** icon

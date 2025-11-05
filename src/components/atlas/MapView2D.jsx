@@ -28,7 +28,13 @@ export default function MapView2D({
   textBoxes,
   showTextBoxes,
   onTextBoxClick,
-  onDeleteTextBox
+  onDeleteTextBox,
+  isDrawingMode,
+  onDrawingComplete,
+  isLocationMode,
+  onLocationSelect,
+  isTextBoxMode,
+  onTextBoxLocationSelect
 }) {
   const mapRef = useRef(null);
   const [viewState, setViewState] = useState({
@@ -344,6 +350,95 @@ export default function MapView2D({
     }
   };
 
+  // Drawing functionality with mouse drag
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded || !isDrawingMode) return;
+    
+    const map = mapRef.current.getMap();
+
+    const handleMouseDown = (e) => {
+      setIsDrawing(true);
+      const { lng, lat } = e.lngLat;
+      setCurrentDrawing([{ lat, lng }]);
+    };
+
+    const handleMouseMove = (e) => {
+      if (!isDrawing) return;
+      const { lng, lat } = e.lngLat;
+      setCurrentDrawing(prev => [...prev, { lat, lng }]);
+    };
+
+    const handleMouseUp = () => {
+      if (!isDrawing || currentDrawing.length < 2) {
+        setIsDrawing(false);
+        setCurrentDrawing([]);
+        return;
+      }
+      setIsDrawing(false);
+      if (onDrawingComplete) {
+        onDrawingComplete(currentDrawing);
+      }
+      setCurrentDrawing([]);
+    };
+
+    map.on('mousedown', handleMouseDown);
+    map.on('mousemove', handleMouseMove);
+    map.on('mouseup', handleMouseUp);
+
+    return () => {
+      map.off('mousedown', handleMouseDown);
+      map.off('mousemove', handleMouseMove);
+      map.off('mouseup', handleMouseUp);
+    };
+  }, [isDrawingMode, mapLoaded, isDrawing, currentDrawing, onDrawingComplete]);
+
+  // Render current drawing line on map
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded || currentDrawing.length === 0) return;
+    
+    const map = mapRef.current.getMap();
+    
+    // Remove existing drawing layer
+    if (map.getLayer('current-drawing')) {
+      map.removeLayer('current-drawing');
+    }
+    if (map.getSource('current-drawing')) {
+      map.removeSource('current-drawing');
+    }
+
+    // Add the current drawing as a line
+    map.addSource('current-drawing', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: currentDrawing.map(p => [p.lng, p.lat])
+        }
+      }
+    });
+
+    map.addLayer({
+      id: 'current-drawing',
+      type: 'line',
+      source: 'current-drawing',
+      paint: {
+        'line-color': '#ff6b6b',
+        'line-width': 3,
+        'line-opacity': 0.8
+      }
+    });
+
+    return () => {
+      if (map.getLayer('current-drawing')) {
+        map.removeLayer('current-drawing');
+      }
+      if (map.getSource('current-drawing')) {
+        map.removeSource('current-drawing');
+      }
+    };
+  }, [currentDrawing, mapLoaded]);
+
   return (
     <div className="relative w-full h-full">
       <Map
@@ -351,10 +446,23 @@ export default function MapView2D({
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         onLoad={handleMapLoad}
+        onClick={(e) => {
+          const { lng, lat } = e.lngLat;
+          if (isLocationMode && onLocationSelect) {
+            onLocationSelect({ lat, lng });
+          } else if (isTextBoxMode && onTextBoxLocationSelect) {
+            onTextBoxLocationSelect({ lat, lng });
+          }
+        }}
         mapStyle={getStyleUrl()}
         mapboxAccessToken={MAPBOX_ACCESS_TOKEN}
         style={{ width: '100%', height: '100%' }}
         attributionControl={false}
+        dragPan={!(isDrawingMode || isLocationMode || isTextBoxMode)}
+        dragRotate={!(isDrawingMode || isLocationMode || isTextBoxMode)}
+        scrollZoom={true}
+        doubleClickZoom={!(isDrawingMode || isLocationMode || isTextBoxMode)}
+        cursor={isDrawingMode ? 'crosshair' : (isLocationMode || isTextBoxMode) ? 'pointer' : 'grab'}
       >
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />

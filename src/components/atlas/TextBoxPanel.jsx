@@ -63,12 +63,20 @@ export default function TextBoxPanel({
   const handleSave = async () => {
     if (selectedCoords && (title || content)) {
       try {
-        // Generate sequential ID
-        const textBoxId = await generateSequentialId(TextBox, 'TXT');
+        console.log('🔵 Starting textbox save...');
+        console.log('📍 Coords:', selectedCoords);
+        console.log('📝 Title:', title);
+        console.log('📝 Content:', content);
         
-        // Save to database
-        const savedTextBox = await TextBox.create({
+        // Generate sequential ID
+        console.log('🔢 Generating sequential ID...');
+        const textBoxId = await generateSequentialId(TextBox, 'TXT');
+        console.log('✅ Generated ID:', textBoxId);
+        
+        // Prepare data object
+        const textBoxData = {
           textBoxId,
+          title: title || 'Untitled',
           content: content || title,
           contributor_name: 'Anonymous',
           coords: {
@@ -78,13 +86,26 @@ export default function TextBoxPanel({
           style: {
             fontSize: '14px',
             color: '#000000',
-            backgroundColor: '#ffffff'
+            backgroundColor: '#ffffff',
+            fontWeight: 'normal',
+            fontFamily: 'Arial, sans-serif'
           },
           status: 'pending',
-          created_date: new Date()
-        });
+          rejection_reason: '',
+          created_date: new Date(),
+          approved_date: null,
+          approved_by: null,
+          view_count: 0,
+          language: language
+        };
         
-        console.log(`✅ TextBox saved with ID: ${textBoxId}`);
+        console.log('💾 Saving to database with data:', textBoxData);
+        
+        // Save to database
+        const savedTextBox = await TextBox.create(textBoxData);
+        
+        console.log('✅ TextBox saved successfully!');
+        console.log('📦 Saved data:', savedTextBox);
         
         // Call parent callback with the saved textbox (including database ID)
         onSaveTextBox({
@@ -103,9 +124,20 @@ export default function TextBoxPanel({
         setIsLocationMode(false);
         onClose();
       } catch (error) {
-        console.error('Error saving text box:', error);
-        alert('Error saving text box. Please try again.');
+        console.error('❌ Error saving text box:', error);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        if (error.response) {
+          console.error('❌ Server response:', error.response);
+        }
+        alert(`Error saving text box: ${error.message || 'Unknown error'}. Check console for details.`);
       }
+    } else {
+      console.warn('⚠️ Cannot save: Missing coords or content');
+      console.log('selectedCoords:', selectedCoords);
+      console.log('title:', title);
+      console.log('content:', content);
+      alert('Please select a location and add some text before saving.');
     }
   };
 

@@ -248,6 +248,12 @@ export default function Atlas() {
           showTextBoxes={showTextBoxes}
           onTextBoxClick={handleTextBoxClick}
           onDeleteTextBox={handleDeleteTextBox}
+          isDrawingMode={isDrawingMode}
+          onDrawingComplete={handleDrawingComplete}
+          isLocationMode={isLocationMode}
+          onLocationSelect={(coords) => setContributionCoords(coords)}
+          isTextBoxMode={isTextBoxMode}
+          onTextBoxLocationSelect={handleTextBoxLocationSelect}
         />
       ) : (
         <MapView3D 
