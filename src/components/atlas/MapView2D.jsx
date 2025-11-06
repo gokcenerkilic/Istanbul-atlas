@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import Map, { Marker, NavigationControl, GeolocateControl } from 'react-map-gl';
+import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 
 const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiZ29rY2VuZXJraWxpYyIsImEiOiJjbWVtdzR3cHkwd3o1MmtvbGJqYTFqa2s3In0.Mc_XAHqv1rpTz6BuZndegQ";
 const MAPBOX_USERNAME = "gokcenerkilic";
@@ -29,6 +29,10 @@ export default function MapView2D({
   showTextBoxes,
   onTextBoxClick,
   onDeleteTextBox,
+  drawings = [],
+  showDrawings = false,
+  onDrawingClick,
+  onDeleteDrawing,
   isDrawingMode,
   onDrawingComplete,
   isLocationMode,
@@ -43,7 +47,11 @@ export default function MapView2D({
     zoom: zoom
   });
   const [selectedTextBox, setSelectedTextBox] = useState(null);
+  const [hoveredTextBox, setHoveredTextBox] = useState(null);
+  const [selectedDrawing, setSelectedDrawing] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [currentDrawing, setCurrentDrawing] = useState([]);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   // Get the appropriate style URL based on activeLayer
   const getStyleUrl = () => {
@@ -467,7 +475,100 @@ export default function MapView2D({
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
 
+        {/* Drawing Popup */}
+        {selectedDrawing && selectedDrawing.coordinates && selectedDrawing.coordinates.length > 0 && (
+          <Popup
+            longitude={selectedDrawing.coordinates[0].lng || selectedDrawing.coordinates[0][1]}
+            latitude={selectedDrawing.coordinates[0].lat || selectedDrawing.coordinates[0][0]}
+            anchor="bottom"
+            onClose={() => setSelectedDrawing(null)}
+            closeButton={false}
+            className="drawing-popup"
+          >
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl p-4 min-w-[250px] max-w-[350px]">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-800 mb-1">
+                    {selectedDrawing.title || 'Drawing'}
+                  </h3>
+                  {selectedDrawing.category && (
+                    <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                      {selectedDrawing.category}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedDrawing(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors ml-2"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="space-y-2">
+                {selectedDrawing.description && (
+                  <p className="text-gray-700 text-sm leading-relaxed">
+                    {selectedDrawing.description}
+                  </p>
+                )}
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  {selectedDrawing.length_meters && (
+                    <div className="bg-gray-50 rounded p-2">
+                      <p className="text-xs text-gray-500">Length</p>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {selectedDrawing.length_meters}m
+                      </p>
+                    </div>
+                  )}
+                  {selectedDrawing.coordinates && (
+                    <div className="bg-gray-50 rounded p-2">
+                      <p className="text-xs text-gray-500">Points</p>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {selectedDrawing.coordinates.length}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Metadata */}
+                <div className="pt-2 border-t border-gray-200 space-y-1">
+                  {selectedDrawing.contributor_name && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-medium">By:</span> {selectedDrawing.contributor_name}
+                    </p>
+                  )}
+                  {selectedDrawing.created_date && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-medium">Date:</span> {new Date(selectedDrawing.created_date).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                {onDeleteDrawing && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Delete this drawing?')) {
+                        onDeleteDrawing(selectedDrawing.id);
+                        setSelectedDrawing(null);
+                      }
+                    }}
+                    className="mt-3 w-full px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors"
+                  >
+                    Delete Drawing
+                  </button>
+                )}
+              </div>
+            </div>
+          </Popup>
+        )}
+
         {/* Text Box Markers */}
+        {console.log('🔍 TextBox Rendering:', { showTextBoxes, textBoxCount: textBoxes?.length, textBoxes })}
         {showTextBoxes && textBoxes && textBoxes.map((textBox) => (
           <Marker
             key={textBox.id}
@@ -479,11 +580,136 @@ export default function MapView2D({
             <div
               className="bg-blue-500 text-white rounded-full p-2 cursor-pointer hover:bg-blue-600 transition-colors shadow-lg"
               style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onMouseEnter={() => setHoveredTextBox(textBox)}
+              onMouseLeave={() => setHoveredTextBox(null)}
             >
               <MessageSquare size={16} />
             </div>
           </Marker>
         ))}
+
+        {/* Hover Popup for TextBox */}
+        {hoveredTextBox && !selectedTextBox && (
+          <Popup
+            longitude={hoveredTextBox.coords.lng}
+            latitude={hoveredTextBox.coords.lat}
+            anchor="top"
+            onClose={() => setHoveredTextBox(null)}
+            closeButton={false}
+            closeOnClick={false}
+            className="textbox-hover-popup"
+          >
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-xl p-3 min-w-[200px] max-w-[300px]">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2 flex-1">
+                  <MessageSquare size={16} className="text-blue-500" />
+                  <h3 className="font-semibold text-gray-800 text-sm">
+                    {hoveredTextBox.title || 'Text Note'}
+                  </h3>
+                </div>
+                {onDeleteTextBox && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(t.confirmDelete)) {
+                        onDeleteTextBox(hoveredTextBox.id);
+                        setHoveredTextBox(null);
+                      }
+                    }}
+                    className="text-red-400 hover:text-red-600 transition-colors p-1 hover:bg-red-50 rounded"
+                    title="Delete"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <p className="text-gray-700 text-xs leading-relaxed line-clamp-3">
+                {hoveredTextBox.content}
+              </p>
+              {hoveredTextBox.contributor_name && (
+                <p className="text-xs text-gray-500 mt-2">
+                  By: {hoveredTextBox.contributor_name}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-1 italic">
+                Click for details
+              </p>
+            </div>
+          </Popup>
+        )}
+
+        {/* Clicked TextBox Popup - Full Details */}
+        {selectedTextBox && (
+          <Popup
+            longitude={selectedTextBox.coords.lng}
+            latitude={selectedTextBox.coords.lat}
+            anchor="bottom"
+            onClose={() => setSelectedTextBox(null)}
+            closeButton={false}
+            closeOnClick={false}
+            className="textbox-popup"
+          >
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl p-4 min-w-[250px] max-w-[350px]">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={18} className="text-blue-500" />
+                  <h3 className="font-semibold text-gray-800">
+                    {selectedTextBox.title || 'Text Note'}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setSelectedTextBox(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="space-y-2">
+                <p className="text-gray-700 text-sm leading-relaxed">
+                  {selectedTextBox.content}
+                </p>
+
+                {/* Metadata */}
+                <div className="pt-2 border-t border-gray-200 space-y-1">
+                  {selectedTextBox.coords && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-medium">Location:</span> {selectedTextBox.coords.lat.toFixed(6)}, {selectedTextBox.coords.lng.toFixed(6)}
+                    </p>
+                  )}
+                  {selectedTextBox.contributor_name && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-medium">By:</span> {selectedTextBox.contributor_name}
+                    </p>
+                  )}
+                  {selectedTextBox.timestamp && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-medium">Date:</span> {new Date(selectedTextBox.timestamp).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                {onDeleteTextBox && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(t.confirmDelete)) {
+                        onDeleteTextBox(selectedTextBox.id);
+                        setSelectedTextBox(null);
+                      }
+                    }}
+                    className="mt-3 w-full px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors flex items-center justify-center gap-2"
+                  >
+                    <X size={14} />
+                    {t.delete}
+                  </button>
+                )}
+              </div>
+            </div>
+          </Popup>
+        )}
       </Map>
     </div>
   );

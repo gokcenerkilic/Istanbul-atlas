@@ -95,6 +95,23 @@ export default function Atlas() {
 
   const t = translations[language];
 
+  // Fetch textboxes from Base44 on mount
+  useEffect(() => {
+    const fetchTextBoxes = async () => {
+      try {
+        console.log('📦 Fetching textboxes from Base44...');
+        const result = await TextBox.list();
+        console.log('✅ Textboxes fetched:', result);
+        setTextBoxes(result || []);
+      } catch (error) {
+        console.error('❌ Error fetching textboxes:', error);
+        setTextBoxes([]);
+      }
+    };
+    
+    fetchTextBoxes();
+  }, []);
+
   const handleLocationSelect = useCallback((coords) => {
     setContributionCoords(coords);
     setIsLocationMode(false);
