@@ -17,6 +17,8 @@ export default function DrawingTools({
   language,
   onDrawingComplete,
   onClearDrawings,
+  drawnPaths = [], // Paths drawn on map from parent
+  onStopDrawing, // Callback to finish current drawing
   scale
 }) {
   const [drawingData, setDrawingData] = useState({
@@ -31,6 +33,28 @@ export default function DrawingTools({
     }
   });
   const [allPaths, setAllPaths] = useState([]);
+
+  // Update allPaths when drawnPaths changes (paths drawn on map)
+  useEffect(() => {
+    console.log('🔍 DrawingTools useEffect - drawnPaths:', drawnPaths?.length, 'isDrawingMode:', isDrawingMode);
+    if (drawnPaths && drawnPaths.length > 0) {
+      console.log('📍 Received drawn paths from map:', drawnPaths.length);
+      const formattedPaths = drawnPaths.map(pathCoords => ({
+        coordinates: pathCoords.map(coord => [coord.lat, coord.lng]),
+        style: { ...drawingData.style }
+      }));
+      setAllPaths(formattedPaths);
+      console.log('✅ allPaths updated, length:', formattedPaths.length);
+    }
+  }, [drawnPaths, drawingData.style]);
+
+  // Log when form should appear
+  useEffect(() => {
+    console.log('📝 Form visibility check - isDrawingMode:', isDrawingMode, 'allPaths.length:', allPaths.length);
+    if (!isDrawingMode && allPaths.length > 0) {
+      console.log('✅ Form should be visible now!');
+    }
+  }, [isDrawingMode, allPaths]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Prevent panel from closing while in drawing mode
@@ -62,7 +86,7 @@ export default function DrawingTools({
       startDrawing: "Çizime Başla",
       stopDrawing: "Çizimi Bitir",
       drawingActive: "Çizim Modu Aktif",
-      drawingInstructions: "Tıklayıp sürükleyerek çizgi çizin. Birden fazla çizgi çizebilirsiniz.",
+      drawingInstructions: "Harita üzerinde tıklayarak noktalar ekleyin. Çift tıklama veya Enter ile bitirin.",
       pathsDrawn: "çizgi çizildi",
       categories: {
         coastline: "Kıyı Çizgisi",
@@ -87,7 +111,7 @@ export default function DrawingTools({
       startDrawing: "Start Drawing",
       stopDrawing: "Stop Drawing",
       drawingActive: "Drawing Mode Active",
-      drawingInstructions: "Click and drag to draw lines. You can draw multiple lines.",
+      drawingInstructions: "Click on the map to add points. Double-click or press Enter to finish.",
       pathsDrawn: "lines drawn",
       categories: {
         coastline: "Coastline",
@@ -107,16 +131,15 @@ export default function DrawingTools({
   ];
 
   const handleDrawingComplete = (pathCoordinates) => {
+    console.log('✏️ Path completed, adding to local paths:', pathCoordinates.length, 'points');
     const newPath = {
       coordinates: pathCoordinates.map(latlng => [latlng.lat, latlng.lng]),
       style: { ...drawingData.style }
     };
     setAllPaths(prev => [...prev, newPath]);
-    
-    // Call the parent callback if provided
-    if (onDrawingComplete) {
-      onDrawingComplete(pathCoordinates);
-    }
+    // Stop drawing mode after completing the geometry
+    setIsDrawingMode(false);
+    // Note: Don't call onDrawingComplete here - that's only for the Save button
   };
 
   const handlePathsUpdate = (updatedPaths) => {
@@ -128,12 +151,23 @@ export default function DrawingTools({
   };
 
   const handleStopDrawing = () => {
+    console.log('🛑 Stop Drawing button clicked');
+    // Call parent to finish the current drawing
+    if (onStopDrawing) {
+      onStopDrawing();
+    }
     setIsDrawingMode(false);
   };
 
   const handleSave = async () => {
+    // Validate required fields
     if (!drawingData.name.trim()) {
       alert(language === 'tr' ? 'Lütfen çizim için bir ad girin' : 'Please enter a name for the drawing');
+      return;
+    }
+
+    if (!drawingData.contributor_name.trim()) {
+      alert(language === 'tr' ? 'Lütfen adınızı girin' : 'Please enter your name');
       return;
     }
 
@@ -144,16 +178,24 @@ export default function DrawingTools({
 
     setIsSaving(true);
     try {
-      // Combine all paths into one drawing
+      // Combine all paths into one polygon/line
       const combinedCoordinates = allPaths.flatMap(path => path.coordinates);
       
-      await Drawing.create({
-        ...drawingData,
-        coordinates: combinedCoordinates,
-        language
+      console.log('💾 Saving drawing with data:', {
+        name: drawingData.name,
+        description: drawingData.description,
+        contributor_name: drawingData.contributor_name,
+        category: drawingData.category,
+        coordinates: combinedCoordinates.length,
+        style: drawingData.style
       });
       
-      // Reset form and drawings
+      // Call parent callback with drawing data and coordinates
+      if (onDrawingComplete) {
+        await onDrawingComplete(drawingData, combinedCoordinates);
+      }
+      
+      // Reset form and drawings after successful save
       setDrawingData({
         name: '',
         description: '',
@@ -167,10 +209,8 @@ export default function DrawingTools({
       });
       setAllPaths([]);
       setIsDrawingMode(false);
-      
-      alert(language === 'tr' ? 'Çizim başarıyla kaydedildi!' : 'Drawing saved successfully!');
     } catch (error) {
-      console.error('Error saving drawing:', error);
+      console.error('❌ Error in handleSave:', error);
       alert(language === 'tr' ? 'Çizim kaydedilirken hata oluştu' : 'Error saving drawing');
     }
     setIsSaving(false);
@@ -181,6 +221,28 @@ export default function DrawingTools({
     if (onClearDrawings) {
       onClearDrawings();
     }
+  };
+
+  const handleClearAndRestart = () => {
+    // Clear all paths
+    setAllPaths([]);
+    if (onClearDrawings) {
+      onClearDrawings();
+    }
+    // Reset form
+    setDrawingData({
+      name: '',
+      description: '',
+      contributor_name: '',
+      category: 'coastline',
+      style: {
+        color: '#ff6b6b',
+        weight: 3,
+        opacity: 0.8
+      }
+    });
+    // Start drawing mode again
+    setIsDrawingMode(true);
   };
 
   // Update style for existing paths when user changes style
@@ -259,6 +321,18 @@ export default function DrawingTools({
                   </Button>
                 </div>
 
+                {/* Clear & Restart Button - Show after drawing is complete */}
+                {!isDrawingMode && allPaths.length > 0 && (
+                  <Button
+                    onClick={handleClearAndRestart}
+                    variant="outline"
+                    className="w-full border-orange-500 text-orange-600 hover:bg-orange-50"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {language === 'tr' ? 'Çizimi Sil ve Yeniden Başla' : 'Clear & Restart Drawing'}
+                  </Button>
+                )}
+
                 {/* Drawing Status */}
                 {isDrawingMode && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">
@@ -272,12 +346,21 @@ export default function DrawingTools({
                   </div>
                 )}
 
-                {allPaths.length > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                    <strong>{allPaths.length}</strong> {t.pathsDrawn}
+                {/* Drawing Complete - Ready to Fill Form */}
+                {!isDrawingMode && allPaths.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 text-sm text-blue-800 font-medium">
+                      ✅ Drawing Complete!
+                    </div>
+                    <p className="text-xs text-blue-700 mt-1">
+                      <strong>{allPaths.length}</strong> {t.pathsDrawn} - {language === 'tr' ? 'Şimdi formu doldurun ve kaydedin' : 'Now fill the form and save'}
+                    </p>
                   </div>
                 )}
 
+                {/* Form fields - only show after drawing is complete */}
+                {!isDrawingMode && allPaths.length > 0 && (
+                  <>
                 <div>
                   <Input
                     placeholder={t.name}
@@ -374,11 +457,13 @@ export default function DrawingTools({
                 <Button
                   onClick={handleSave}
                   className="w-full bg-green-600 hover:bg-green-700"
-                  disabled={isSaving || !drawingData.name.trim() || allPaths.length === 0}
+                  disabled={isSaving || !drawingData.name.trim() || !drawingData.contributor_name.trim() || allPaths.length === 0}
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isSaving ? (language === 'tr' ? 'Kaydediliyor...' : 'Saving...') : t.save}
                 </Button>
+                </>
+                )}
               </div>
             </CardContent>
           </Card>

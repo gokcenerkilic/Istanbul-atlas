@@ -53,6 +53,9 @@ export default function Atlas() {
   const [contributionCoords, setContributionCoords] = useState(null);
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [currentDrawings, setCurrentDrawings] = useState([]); // New state for interactive drawings
+  const [drawnPaths, setDrawnPaths] = useState([]); // Paths drawn on map, not yet saved
+  const [savedDrawings, setSavedDrawings] = useState([]); // Saved drawings (shown as pins)
+  const [selectedDrawing, setSelectedDrawing] = useState(null); // Currently selected drawing to display
   const [mapCenter, setMapCenter] = useState([41.0, 29.0]); // Updated center
   const [mapZoom, setMapZoom] = useState(10); // Updated zoom
   const [searchResults, setSearchResults] = useState(null);
@@ -112,6 +115,72 @@ export default function Atlas() {
     fetchTextBoxes();
   }, []);
 
+  // Fetch saved drawings from Base44 on mount
+  useEffect(() => {
+    const fetchDrawings = async () => {
+      try {
+        console.log('🎨 Fetching drawings from Base44...');
+        const result = await Drawing.list();
+        console.log('✅ Drawings fetched:', result.length, 'drawings');
+        console.log('📊 Raw data from Base44:', result);
+        
+        // Transform drawings to match the expected format
+        const formattedDrawings = result.map((drawing, index) => {
+          console.log(`🔍 Drawing ${index + 1}:`, {
+            _id: drawing._id,
+            drawingId: drawing.drawingId,
+            title: drawing.title,
+            description: drawing.description,
+            category: drawing.category,
+            coordinatesCount: drawing.coordinates?.length
+          });
+          
+          // Calculate center point for pin location if needed
+          const lats = drawing.coordinates.map(c => c[0]);
+          const lngs = drawing.coordinates.map(c => c[1]);
+          const centerLat = (Math.max(...lats) + Math.min(...lats)) / 2;
+          const centerLng = (Math.max(...lngs) + Math.min(...lngs)) / 2;
+          
+          const formatted = {
+            id: drawing._id || drawing.drawingId,
+            drawingId: drawing.drawingId,
+            title: drawing.title,
+            description: drawing.description,
+            contributor_name: drawing.contributor_name,
+            coordinates: drawing.coordinates,
+            style: drawing.style || { color: '#ff6b6b', weight: 3, opacity: 0.8 },
+            pinLocation: { lat: centerLat, lng: centerLng },
+            bounds: drawing.bounds,
+            length_meters: drawing.length_meters,
+            category: drawing.category,
+            created_date: drawing.created_date
+          };
+          
+          console.log(`✅ Formatted drawing ${index + 1}:`, {
+            id: formatted.id,
+            title: formatted.title,
+            category: formatted.category
+          });
+          
+          return formatted;
+        });
+        
+        console.log('📦 Final savedDrawings array:', formattedDrawings.map(d => ({
+          id: d.id,
+          title: d.title,
+          category: d.category
+        })));
+        
+        setSavedDrawings(formattedDrawings);
+      } catch (error) {
+        console.error('❌ Error fetching drawings:', error);
+        setSavedDrawings([]);
+      }
+    };
+    
+    fetchDrawings();
+  }, []);
+
   const handleLocationSelect = useCallback((coords) => {
     setContributionCoords(coords);
     setIsLocationMode(false);
@@ -124,47 +193,161 @@ export default function Atlas() {
 
   const handleContributionPanelClose = () => {
     setActivePanel(null);
-    setIsLocationMode(false);
   };
 
-  const handleDrawingComplete = useCallback(async (pathCoordinates) => {
-    console.log('Drawing completed:', pathCoordinates);
+  // Handler for when a path is drawn on the map (NOT saving yet)
+  const handlePathDrawn = useCallback((pathCoordinates) => {
+    console.log('✏️ Path drawn on map:', pathCoordinates);
+    // Store the path so DrawingTools can access it
+    setDrawnPaths(prev => [...prev, pathCoordinates]);
+    // Stop drawing mode so user can fill the form
+    setIsDrawingMode(false);
+  }, []);
+
+  // Handler for Stop Drawing button - finishes current drawing
+  const handleStopDrawing = useCallback(() => {
+    console.log('🛑 Stop Drawing triggered from button');
+    // Trigger the map to finish the current drawing
+    // This will be handled by MapView2D
+    setIsDrawingMode(false);
+  }, []);
+
+  // Handler for deleting a drawing
+  const handleDeleteDrawing = useCallback(async (drawingId) => {
+    try {
+      console.log('🗑️ Deleting drawing:', drawingId);
+      
+      // Remove from local state
+      setSavedDrawings(prev => prev.filter(d => d.id !== drawingId));
+      setSelectedDrawing(null);
+      
+      // TODO: Delete from database when ready
+      // await Drawing.delete(drawingId);
+      
+      alert(language === 'tr' ? 'Çizim silindi!' : 'Drawing deleted!');
+    } catch (error) {
+      console.error('❌ Error deleting drawing:', error);
+      alert(`Error deleting drawing: ${error.message}`);
+    }
+  }, [language]); 
+
+  const handleDrawingComplete = useCallback(async (drawingData, pathCoordinates) => {
+    console.log('🎨 Drawing save requested:', { drawingData, pathCoordinates });
+    
+    // Validation is handled in DrawingTools component before calling this
+    // No need to validate again here
     
     try {
+      // Validate pathCoordinates exists and is an array
+      if (!pathCoordinates || !Array.isArray(pathCoordinates) || pathCoordinates.length === 0) {
+        console.error('❌ Invalid pathCoordinates:', pathCoordinates);
+        alert(language === 'tr' ? 'Çizim verileri geçersiz' : 'Invalid drawing data');
+        return;
+      }
+      
       // Generate sequential ID for the drawing
       const drawingId = await generateSequentialId(Drawing, 'DRW');
       
+      console.log('📍 Processing coordinates:', pathCoordinates);
+      
+      // Convert coordinates to array format [lat, lng] for Base44
+      // Base44 expects coordinates as arrays, not objects
+      const coordinates = pathCoordinates.map(coord => {
+        if (Array.isArray(coord)) {
+          // Already in [lat, lng] format
+          return coord;
+        } else if (coord.lat !== undefined && coord.lng !== undefined) {
+          // Convert {lat, lng} to [lat, lng]
+          return [coord.lat, coord.lng];
+        } else {
+          console.error('❌ Unknown coordinate format:', coord);
+          throw new Error('Invalid coordinate format');
+        }
+      });
+      
+      console.log('✅ Converted coordinates:', coordinates);
+      
+      // Calculate bounds (extract lat/lng from arrays)
+      const lats = coordinates.map(c => c[0]);
+      const lngs = coordinates.map(c => c[1]);
+      const bounds = {
+        north: Math.max(...lats),
+        south: Math.min(...lats),
+        east: Math.max(...lngs),
+        west: Math.min(...lngs)
+      };
+      
+      // Calculate approximate length in meters (simple Haversine)
+      let length_meters = 0;
+      for (let i = 0; i < coordinates.length - 1; i++) {
+        const R = 6371000; // Earth radius in meters
+        const lat1 = coordinates[i].lat * Math.PI / 180;
+        const lat2 = coordinates[i + 1].lat * Math.PI / 180;
+        const deltaLat = (coordinates[i + 1].lat - coordinates[i].lat) * Math.PI / 180;
+        const deltaLng = (coordinates[i + 1].lng - coordinates[i].lng) * Math.PI / 180;
+        
+        const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                  Math.cos(lat1) * Math.cos(lat2) *
+                  Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        length_meters += R * c;
+      }
+      
       // Save drawing to database
-      await Drawing.create({
+      const savedDrawing = await Drawing.create({
         drawingId,
-        title: `Drawing ${drawingId}`,
-        description: '',
-        contributor_name: 'Anonymous',
-        coordinates: pathCoordinates.map(coord => ({
-          lat: coord.lat,
-          lng: coord.lng
-        })),
-        style: {
+        title: drawingData.name,
+        description: drawingData.description || '',
+        contributor_name: drawingData.contributor_name,
+        category: drawingData.category || 'other',
+        coordinates: coordinates,
+        style: drawingData.style || {
           color: '#ff6b6b',
           weight: 3,
           opacity: 0.8
         },
+        bounds: bounds,
+        length_meters: Math.round(length_meters),
         status: 'pending',
-        created_date: new Date()
+        rejection_reason: '',
+        created_date: new Date(),
+        approved_date: null,
+        approved_by: null,
+        language: language
       });
       
-      console.log(`✅ Drawing saved with ID: ${drawingId}`);
+      console.log(`✅ Drawing saved with ID: ${drawingId}`, savedDrawing);
       
-      // Add to local state for immediate display
-      setCurrentDrawings(prev => [...prev, pathCoordinates]);
+      // Calculate center point for pin marker
+      const centerLat = (bounds.north + bounds.south) / 2;
+      const centerLng = (bounds.east + bounds.west) / 2;
+      
+      // Add to saved drawings with pin location
+      setSavedDrawings(prev => [...prev, {
+        id: savedDrawing._id || drawingId,
+        drawingId,
+        title: drawingData.name,
+        description: drawingData.description,
+        contributor_name: drawingData.contributor_name,
+        coordinates: coordinates,
+        style: drawingData.style,
+        pinLocation: { lat: centerLat, lng: centerLng },
+        bounds: bounds,
+        length_meters: Math.round(length_meters)
+      }]);
+      
+      // Clear the drawn paths (remove from map)
+      setDrawnPaths([]);
+      
+      alert(language === 'tr' ? 'Çizim başarıyla kaydedildi!' : 'Drawing saved successfully!');
+      
+      setIsDrawingMode(false);
+      setActivePanel(null);
     } catch (error) {
-      console.error('Error saving drawing:', error);
-      alert('Error saving drawing. Please try again.');
+      console.error('❌ Error saving drawing:', error);
+      alert(`Error saving drawing: ${error.message}. Please try again.`);
     }
-    
-    setIsDrawingMode(false);
-    setActivePanel(null);
-  }, []);
+  }, [language]);
 
   const handleClearDrawings = useCallback(() => {
     setCurrentDrawings([]); // Clear all drawings from state
@@ -266,11 +449,19 @@ export default function Atlas() {
           onTextBoxClick={handleTextBoxClick}
           onDeleteTextBox={handleDeleteTextBox}
           isDrawingMode={isDrawingMode}
-          onDrawingComplete={handleDrawingComplete}
+          onDrawingComplete={handlePathDrawn}
           isLocationMode={isLocationMode}
           onLocationSelect={(coords) => setContributionCoords(coords)}
           isTextBoxMode={isTextBoxMode}
           onTextBoxLocationSelect={handleTextBoxLocationSelect}
+          drawnPaths={drawnPaths}
+          savedDrawings={savedDrawings}
+          selectedDrawing={selectedDrawing}
+          onDrawingPinClick={(drawing) => {
+            console.log('👆 Drawing selected in Atlas:', drawing);
+            setSelectedDrawing(drawing);
+          }}
+          onDeleteDrawing={handleDeleteDrawing}
         />
       ) : (
         <MapView3D 
@@ -325,8 +516,10 @@ export default function Atlas() {
         isDrawingMode={isDrawingMode}
         setIsDrawingMode={setIsDrawingMode}
         language={language}
-        onDrawingComplete={handleDrawingComplete} // Pass the handler for completion
-        onClearDrawings={handleClearDrawings}     // Pass the clear drawings handler
+        onDrawingComplete={handleDrawingComplete} // Pass the handler for Save button
+        onClearDrawings={() => { handleClearDrawings(); setDrawnPaths([]); }} // Clear both
+        drawnPaths={drawnPaths} // Pass paths drawn on map
+        onStopDrawing={handleStopDrawing} // Pass stop drawing handler
         scale={uiScale}
       />
 

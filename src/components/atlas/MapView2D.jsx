@@ -25,20 +25,21 @@ export default function MapView2D({
   zoom, 
   activeLayer,
   language,
-  textBoxes,
+  textBoxes = [],
   showTextBoxes,
   onTextBoxClick,
   onDeleteTextBox,
-  drawings = [],
-  showDrawings = false,
-  onDrawingClick,
-  onDeleteDrawing,
   isDrawingMode,
   onDrawingComplete,
   isLocationMode,
   onLocationSelect,
   isTextBoxMode,
-  onTextBoxLocationSelect
+  onTextBoxLocationSelect,
+  drawnPaths = [], // Unsaved drawings to display
+  savedDrawings = [], // Saved drawings (shown as pins)
+  selectedDrawing = null, // Currently selected drawing to show
+  onDrawingPinClick, // Callback when pin is clicked
+  onDeleteDrawing // Callback to delete a drawing
 }) {
   const mapRef = useRef(null);
   const [viewState, setViewState] = useState({
@@ -48,10 +49,20 @@ export default function MapView2D({
   });
   const [selectedTextBox, setSelectedTextBox] = useState(null);
   const [hoveredTextBox, setHoveredTextBox] = useState(null);
-  const [selectedDrawing, setSelectedDrawing] = useState(null);
+  const [hoveredDrawing, setHoveredDrawing] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [currentDrawing, setCurrentDrawing] = useState([]);
   const [isDrawing, setIsDrawing] = useState(false);
+
+  // Debug: Log when selectedDrawing changes
+  useEffect(() => {
+    console.log('🔄 selectedDrawing prop changed:', selectedDrawing ? {
+      id: selectedDrawing.id,
+      title: selectedDrawing.title,
+      hasCoordinates: !!selectedDrawing.coordinates,
+      coordinatesLength: selectedDrawing.coordinates?.length
+    } : 'NULL');
+  }, [selectedDrawing]);
 
   // Get the appropriate style URL based on activeLayer
   const getStyleUrl = () => {
@@ -358,47 +369,70 @@ export default function MapView2D({
     }
   };
 
-  // Drawing functionality with mouse drag
+  // Complete drawing when drawing mode is turned off
   useEffect(() => {
-    if (!mapRef.current || !mapLoaded || !isDrawingMode) return;
-    
-    const map = mapRef.current.getMap();
-
-    const handleMouseDown = (e) => {
-      setIsDrawing(true);
-      const { lng, lat } = e.lngLat;
-      setCurrentDrawing([{ lat, lng }]);
-    };
-
-    const handleMouseMove = (e) => {
-      if (!isDrawing) return;
-      const { lng, lat } = e.lngLat;
-      setCurrentDrawing(prev => [...prev, { lat, lng }]);
-    };
-
-    const handleMouseUp = () => {
-      if (!isDrawing || currentDrawing.length < 2) {
-        setIsDrawing(false);
-        setCurrentDrawing([]);
-        return;
-      }
-      setIsDrawing(false);
+    // When drawing mode is turned off and we have points, complete the drawing
+    if (!isDrawingMode && currentDrawing.length >= 2) {
+      console.log('🛑 Drawing mode stopped, completing drawing with', currentDrawing.length, 'points');
       if (onDrawingComplete) {
         onDrawingComplete(currentDrawing);
       }
       setCurrentDrawing([]);
+    }
+  }, [isDrawingMode]);
+
+  // Drawing functionality with click-to-add-points
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded || !isDrawingMode) return;
+    
+    const map = mapRef.current.getMap();
+    map.getCanvas().style.cursor = 'crosshair';
+
+    const handleClick = (e) => {
+      const { lng, lat } = e.lngLat;
+      console.log('📍 Point added:', { lat, lng });
+      setCurrentDrawing(prev => [...prev, { lat, lng }]);
     };
 
-    map.on('mousedown', handleMouseDown);
-    map.on('mousemove', handleMouseMove);
-    map.on('mouseup', handleMouseUp);
+    const handleDblClick = (e) => {
+      e.preventDefault();
+      console.log('✅ Double-click detected, finishing drawing');
+      
+      if (currentDrawing.length >= 2) {
+        if (onDrawingComplete) {
+          onDrawingComplete(currentDrawing);
+        }
+        setCurrentDrawing([]);
+      }
+    };
+
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        console.log(`✅ ${e.key} pressed, finishing drawing`);
+        
+        if (currentDrawing.length >= 2) {
+          if (onDrawingComplete) {
+            onDrawingComplete(currentDrawing);
+          }
+          setCurrentDrawing([]);
+        } else if (e.key === 'Escape') {
+          // Cancel drawing
+          setCurrentDrawing([]);
+        }
+      }
+    };
+
+    map.on('click', handleClick);
+    map.on('dblclick', handleDblClick);
+    window.addEventListener('keydown', handleKeyPress);
 
     return () => {
-      map.off('mousedown', handleMouseDown);
-      map.off('mousemove', handleMouseMove);
-      map.off('mouseup', handleMouseUp);
+      map.off('click', handleClick);
+      map.off('dblclick', handleDblClick);
+      window.removeEventListener('keydown', handleKeyPress);
+      map.getCanvas().style.cursor = '';
     };
-  }, [isDrawingMode, mapLoaded, isDrawing, currentDrawing, onDrawingComplete]);
+  }, [isDrawingMode, mapLoaded, currentDrawing, onDrawingComplete]);
 
   // Render current drawing line on map
   useEffect(() => {
@@ -406,46 +440,376 @@ export default function MapView2D({
     
     const map = mapRef.current.getMap();
     
-    // Remove existing drawing layer
-    if (map.getLayer('current-drawing')) {
-      map.removeLayer('current-drawing');
+    // Remove existing drawing layers
+    if (map.getLayer('current-drawing-line')) {
+      map.removeLayer('current-drawing-line');
+    }
+    if (map.getLayer('current-drawing-points')) {
+      map.removeLayer('current-drawing-points');
     }
     if (map.getSource('current-drawing')) {
       map.removeSource('current-drawing');
     }
 
-    // Add the current drawing as a line
+    // Add points source (always show points, even with 1 point)
     map.addSource('current-drawing', {
       type: 'geojson',
       data: {
-        type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: currentDrawing.map(p => [p.lng, p.lat])
-        }
+        type: 'FeatureCollection',
+        features: currentDrawing.map(p => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [p.lng, p.lat]
+          }
+        }))
       }
     });
 
+    // Point markers layer (always visible)
     map.addLayer({
-      id: 'current-drawing',
-      type: 'line',
+      id: 'current-drawing-points',
+      type: 'circle',
       source: 'current-drawing',
       paint: {
-        'line-color': '#ff6b6b',
-        'line-width': 3,
-        'line-opacity': 0.8
+        'circle-radius': 6,
+        'circle-color': '#ff6b6b',
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#ffffff',
+        'circle-opacity': 1
       }
     });
 
+    // Add line layer if more than 1 point
+    if (currentDrawing.length >= 2) {
+      map.addSource('current-drawing-line', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: currentDrawing.map(p => [p.lng, p.lat])
+          }
+        }
+      });
+
+      map.addLayer({
+        id: 'current-drawing-line',
+        type: 'line',
+        source: 'current-drawing-line',
+        paint: {
+          'line-color': '#ff6b6b',
+          'line-width': 4,
+          'line-opacity': 0.9
+        }
+      }, 'current-drawing-points'); // Add line below points
+    }
+
     return () => {
-      if (map.getLayer('current-drawing')) {
-        map.removeLayer('current-drawing');
+      if (map.getLayer('current-drawing-line')) {
+        map.removeLayer('current-drawing-line');
+      }
+      if (map.getLayer('current-drawing-points')) {
+        map.removeLayer('current-drawing-points');
+      }
+      if (map.getSource('current-drawing-line')) {
+        map.removeSource('current-drawing-line');
       }
       if (map.getSource('current-drawing')) {
         map.removeSource('current-drawing');
       }
     };
   }, [currentDrawing, mapLoaded]);
+
+  // Render completed but unsaved drawings (drawnPaths)
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded || drawnPaths.length === 0) return;
+    
+    const map = mapRef.current.getMap();
+    
+    // Remove existing completed drawings layers
+    if (map.getLayer('unsaved-drawings-line')) {
+      map.removeLayer('unsaved-drawings-line');
+    }
+    if (map.getLayer('unsaved-drawings-points')) {
+      map.removeLayer('unsaved-drawings-points');
+    }
+    if (map.getSource('unsaved-drawings')) {
+      map.removeSource('unsaved-drawings');
+    }
+
+    // Create features for all completed drawings
+    const lineFeatures = [];
+    const pointFeatures = [];
+    
+    drawnPaths.forEach((path, index) => {
+      if (path.length >= 2) {
+        // Add line feature
+        lineFeatures.push({
+          type: 'Feature',
+          properties: { drawingIndex: index },
+          geometry: {
+            type: 'LineString',
+            coordinates: path.map(p => [p.lng, p.lat])
+          }
+        });
+        
+        // Add point features
+        path.forEach(p => {
+          pointFeatures.push({
+            type: 'Feature',
+            properties: { drawingIndex: index },
+            geometry: {
+              type: 'Point',
+              coordinates: [p.lng, p.lat]
+            }
+          });
+        });
+      }
+    });
+
+    if (lineFeatures.length > 0) {
+      // Add source with all completed drawings
+      map.addSource('unsaved-drawings', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [...lineFeatures, ...pointFeatures]
+        }
+      });
+
+      // Add line layer
+      map.addLayer({
+        id: 'unsaved-drawings-line',
+        type: 'line',
+        source: 'unsaved-drawings',
+        filter: ['==', ['geometry-type'], 'LineString'],
+        paint: {
+          'line-color': '#ff6b6b',
+          'line-width': 4,
+          'line-opacity': 0.8
+        }
+      });
+
+      // Add points layer
+      map.addLayer({
+        id: 'unsaved-drawings-points',
+        type: 'circle',
+        source: 'unsaved-drawings',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': '#ff6b6b',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.9
+        }
+      });
+    }
+
+    return () => {
+      if (map.getLayer('unsaved-drawings-line')) {
+        map.removeLayer('unsaved-drawings-line');
+      }
+      if (map.getLayer('unsaved-drawings-points')) {
+        map.removeLayer('unsaved-drawings-points');
+      }
+      if (map.getSource('unsaved-drawings')) {
+        map.removeSource('unsaved-drawings');
+      }
+    };
+  }, [drawnPaths, mapLoaded]);
+
+  // Render saved drawings (always visible)
+  useEffect(() => {
+    console.log('🗺️ Saved drawings effect triggered:', {
+      hasMap: !!mapRef.current,
+      mapLoaded,
+      drawingsCount: savedDrawings.length,
+      drawings: savedDrawings.map(d => ({ id: d.id, title: d.title }))
+    });
+    
+    if (!mapRef.current || !mapLoaded || savedDrawings.length === 0) {
+      console.log('⚠️ Skipping saved drawings render:', {
+        hasMap: !!mapRef.current,
+        mapLoaded,
+        drawingsCount: savedDrawings.length
+      });
+      return;
+    }
+    
+    const map = mapRef.current.getMap();
+    
+    // Remove existing saved drawings
+    if (map.getLayer('saved-drawings-line')) {
+      map.removeLayer('saved-drawings-line');
+    }
+    if (map.getLayer('saved-drawings-points')) {
+      map.removeLayer('saved-drawings-points');
+    }
+    if (map.getSource('saved-drawings')) {
+      map.removeSource('saved-drawings');
+    }
+
+    console.log('🎨 Rendering', savedDrawings.length, 'saved drawings');
+
+    // Create features for all saved drawings
+    const lineFeatures = [];
+    const pointFeatures = [];
+    
+    savedDrawings.forEach((drawing) => {
+      if (drawing.coordinates && drawing.coordinates.length >= 2) {
+        // Add line feature
+        lineFeatures.push({
+          type: 'Feature',
+          properties: {
+            id: drawing.id,
+            title: drawing.title,
+            description: drawing.description,
+            contributor: drawing.contributor_name,
+            color: drawing.style?.color || '#ff6b6b'
+          },
+          geometry: {
+            type: 'LineString',
+            coordinates: drawing.coordinates.map(c => [c[1], c[0]]) // [lng, lat]
+          }
+        });
+        
+        // Add point features
+        drawing.coordinates.forEach(c => {
+          pointFeatures.push({
+            type: 'Feature',
+            properties: {
+              id: drawing.id,
+              color: drawing.style?.color || '#ff6b6b'
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: [c[1], c[0]] // [lng, lat]
+            }
+          });
+        });
+      }
+    });
+
+    if (lineFeatures.length > 0) {
+      // Add source
+      map.addSource('saved-drawings', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [...lineFeatures, ...pointFeatures]
+        }
+      });
+
+      // Add line layer
+      map.addLayer({
+        id: 'saved-drawings-line',
+        type: 'line',
+        source: 'saved-drawings',
+        filter: ['==', ['geometry-type'], 'LineString'],
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 4,
+          'line-opacity': 0.8
+        }
+      });
+
+      // Add points layer
+      map.addLayer({
+        id: 'saved-drawings-points',
+        type: 'circle',
+        source: 'saved-drawings',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.8
+        }
+      });
+
+      // Add hover handler for saved drawings
+      const handleDrawingMouseEnter = (e) => {
+        if (e.features.length > 0) {
+          const feature = e.features[0];
+          const drawingId = feature.properties.id;
+          const drawing = savedDrawings.find(d => d.id === drawingId);
+          if (drawing) {
+            setHoveredDrawing(drawing);
+          }
+        }
+      };
+
+      const handleDrawingMouseLeave = () => {
+        setHoveredDrawing(null);
+      };
+
+      // Add click handler for saved drawings
+      const handleDrawingClick = (e) => {
+        console.log('👆 Click event on drawing layer:', e.features?.length, 'features');
+        if (e.features.length > 0) {
+          const feature = e.features[0];
+          const drawingId = feature.properties.id;
+          console.log('🎯 Drawing ID from feature:', drawingId);
+          const drawing = savedDrawings.find(d => d.id === drawingId);
+          console.log('🔍 Found drawing:', drawing ? drawing.title : 'NOT FOUND');
+          if (drawing && onDrawingPinClick) {
+            console.log('🎨 Drawing clicked - calling onDrawingPinClick:', drawing.title);
+            onDrawingPinClick(drawing);
+          } else {
+            console.warn('⚠️ Drawing not found or no callback:', { drawing, hasCallback: !!onDrawingPinClick });
+          }
+        } else {
+          console.warn('⚠️ No features in click event');
+        }
+      };
+
+      // Add hover cursor and click handlers for LINES
+      map.on('mouseenter', 'saved-drawings-line', (e) => {
+        map.getCanvas().style.cursor = 'pointer';
+        handleDrawingMouseEnter(e);
+      });
+      map.on('mouseleave', 'saved-drawings-line', () => {
+        map.getCanvas().style.cursor = '';
+        handleDrawingMouseLeave();
+      });
+      map.on('click', 'saved-drawings-line', handleDrawingClick);
+
+      // Add hover cursor and click handlers for POINTS (nodes)
+      map.on('mouseenter', 'saved-drawings-points', (e) => {
+        map.getCanvas().style.cursor = 'pointer';
+        handleDrawingMouseEnter(e);
+      });
+      map.on('mouseleave', 'saved-drawings-points', () => {
+        map.getCanvas().style.cursor = '';
+        handleDrawingMouseLeave();
+      });
+      map.on('click', 'saved-drawings-points', handleDrawingClick);
+
+      return () => {
+        // Remove line handlers
+        map.off('click', 'saved-drawings-line', handleDrawingClick);
+        map.off('mouseenter', 'saved-drawings-line');
+        map.off('mouseleave', 'saved-drawings-line');
+        // Remove point handlers
+        map.off('click', 'saved-drawings-points', handleDrawingClick);
+        map.off('mouseenter', 'saved-drawings-points');
+        map.off('mouseleave', 'saved-drawings-points');
+        if (map.getLayer('saved-drawings-line')) {
+          map.removeLayer('saved-drawings-line');
+        }
+        if (map.getLayer('saved-drawings-points')) {
+          map.removeLayer('saved-drawings-points');
+        }
+        if (map.getSource('saved-drawings')) {
+          map.removeSource('saved-drawings');
+        }
+      };
+    }
+  }, [savedDrawings, mapLoaded, onDrawingPinClick]);
+
 
   return (
     <div className="relative w-full h-full">
@@ -475,97 +839,162 @@ export default function MapView2D({
         <NavigationControl position="top-right" />
         <GeolocateControl position="top-right" />
 
-        {/* Drawing Popup */}
-        {selectedDrawing && selectedDrawing.coordinates && selectedDrawing.coordinates.length > 0 && (
+        {/* Hover Popup for Drawing */}
+        {hoveredDrawing && !selectedDrawing && (
           <Popup
-            longitude={selectedDrawing.coordinates[0].lng || selectedDrawing.coordinates[0][1]}
-            latitude={selectedDrawing.coordinates[0].lat || selectedDrawing.coordinates[0][0]}
-            anchor="bottom"
-            onClose={() => setSelectedDrawing(null)}
+            longitude={hoveredDrawing.coordinates[0][1]}
+            latitude={hoveredDrawing.coordinates[0][0]}
+            anchor="top"
+            onClose={() => setHoveredDrawing(null)}
             closeButton={false}
-            className="drawing-popup"
+            closeOnClick={false}
+            className="drawing-hover-popup"
           >
-            <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-2xl p-4 min-w-[250px] max-w-[350px]">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-3">
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-xl p-3 min-w-[200px] max-w-[300px]">
+              <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800 mb-1">
-                    {selectedDrawing.title || 'Drawing'}
+                  <h3 className="font-semibold text-gray-800 text-sm">
+                    {hoveredDrawing.title || 'Drawing'}
                   </h3>
-                  {selectedDrawing.category && (
-                    <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                      {selectedDrawing.category}
+                  {hoveredDrawing.category && (
+                    <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full mt-1">
+                      {hoveredDrawing.category}
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => setSelectedDrawing(null)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors ml-2"
-                >
-                  <X size={18} />
-                </button>
               </div>
-
-              {/* Content */}
-              <div className="space-y-2">
-                {selectedDrawing.description && (
-                  <p className="text-gray-700 text-sm leading-relaxed">
-                    {selectedDrawing.description}
-                  </p>
-                )}
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  {selectedDrawing.length_meters && (
-                    <div className="bg-gray-50 rounded p-2">
-                      <p className="text-xs text-gray-500">Length</p>
-                      <p className="text-sm font-semibold text-gray-800">
-                        {selectedDrawing.length_meters}m
-                      </p>
-                    </div>
-                  )}
-                  {selectedDrawing.coordinates && (
-                    <div className="bg-gray-50 rounded p-2">
-                      <p className="text-xs text-gray-500">Points</p>
-                      <p className="text-sm font-semibold text-gray-800">
-                        {selectedDrawing.coordinates.length}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Metadata */}
-                <div className="pt-2 border-t border-gray-200 space-y-1">
-                  {selectedDrawing.contributor_name && (
-                    <p className="text-xs text-gray-500">
-                      <span className="font-medium">By:</span> {selectedDrawing.contributor_name}
-                    </p>
-                  )}
-                  {selectedDrawing.created_date && (
-                    <p className="text-xs text-gray-500">
-                      <span className="font-medium">Date:</span> {new Date(selectedDrawing.created_date).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions */}
-                {onDeleteDrawing && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Delete this drawing?')) {
-                        onDeleteDrawing(selectedDrawing.id);
-                        setSelectedDrawing(null);
-                      }
-                    }}
-                    className="mt-3 w-full px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors"
-                  >
-                    Delete Drawing
-                  </button>
-                )}
-              </div>
+              {hoveredDrawing.description && (
+                <p className="text-gray-600 text-xs leading-relaxed mb-2">
+                  {hoveredDrawing.description.substring(0, 80)}{hoveredDrawing.description.length > 80 ? '...' : ''}
+                </p>
+              )}
+              <p className="text-xs text-gray-500 italic">
+                Click for details
+              </p>
             </div>
           </Popup>
         )}
+
+        {/* Clicked Drawing Popup */}
+        {selectedDrawing && selectedDrawing.coordinates && selectedDrawing.coordinates.length > 0 && (() => {
+          // Calculate coordinates
+          const firstCoord = selectedDrawing.coordinates[0];
+          const lng = Array.isArray(firstCoord) ? firstCoord[1] : firstCoord.lng;
+          const lat = Array.isArray(firstCoord) ? firstCoord[0] : firstCoord.lat;
+          
+          console.log('✅ RENDERING POPUP for:', selectedDrawing.title, '@ coords:', { lat, lng });
+          
+          return (
+              <Popup
+                longitude={lng}
+                latitude={lat}
+                anchor="bottom"
+                onClose={() => {
+                  console.log('❌ Closing drawing popup');
+                  if (onDrawingPinClick) onDrawingPinClick(null);
+                }}
+                closeButton={true}
+                className="drawing-popup"
+              >
+                <div className="bg-white rounded-lg shadow-2xl p-4 min-w-[280px] max-w-[350px]">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900 text-base mb-1">
+                        {selectedDrawing.title || 'Drawing'}
+                      </h3>
+                      {selectedDrawing.category && (
+                        <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                          {selectedDrawing.category}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        console.log('❌ Close button clicked');
+                        if (onDrawingPinClick) onDrawingPinClick(null);
+                      }}
+                      className="text-gray-400 hover:text-gray-600 transition-colors ml-2 p-1 hover:bg-gray-100 rounded"
+                      title="Close"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Content */}
+                  <div className="space-y-3">
+                    {selectedDrawing.description && (
+                      <p className="text-gray-700 text-sm leading-relaxed">
+                        {selectedDrawing.description}
+                      </p>
+                    )}
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {selectedDrawing.length_meters && (
+                        <div className="bg-blue-50 rounded-lg p-2.5">
+                          <p className="text-xs text-blue-600 font-medium">Length</p>
+                          <p className="text-sm font-bold text-blue-900">
+                            {selectedDrawing.length_meters}m
+                          </p>
+                        </div>
+                      )}
+                      {selectedDrawing.coordinates && (
+                        <div className="bg-green-50 rounded-lg p-2.5">
+                          <p className="text-xs text-green-600 font-medium">Points</p>
+                          <p className="text-sm font-bold text-green-900">
+                            {selectedDrawing.coordinates.length}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="pt-2 border-t border-gray-200 space-y-1.5">
+                      {selectedDrawing.contributor_name && (
+                        <p className="text-xs text-gray-600">
+                          <span className="font-semibold">Contributor:</span> {selectedDrawing.contributor_name}
+                        </p>
+                      )}
+                      {selectedDrawing.created_date && (
+                        <p className="text-xs text-gray-600">
+                          <span className="font-semibold">Date:</span> {new Date(selectedDrawing.created_date).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => {
+                          console.log('❌ Close button (bottom) clicked');
+                          if (onDrawingPinClick) onDrawingPinClick(null);
+                        }}
+                        className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition-colors"
+                      >
+                        {language === 'tr' ? 'Kapat' : 'Close'}
+                      </button>
+                      {onDeleteDrawing && (
+                        <button
+                          onClick={() => {
+                            console.log('🗑️ Delete button clicked');
+                            if (window.confirm(language === 'tr' ? 'Bu çizimi silmek istediğinizden emin misiniz?' : 'Are you sure you want to delete this drawing?')) {
+                              onDeleteDrawing(selectedDrawing.id);
+                              if (onDrawingPinClick) onDrawingPinClick(null);
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <X size={14} />
+                          {language === 'tr' ? 'Sil' : 'Delete'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Popup>
+          );
+        })()}
 
         {/* Text Box Markers */}
         {console.log('🔍 TextBox Rendering:', { showTextBoxes, textBoxCount: textBoxes?.length, textBoxes })}
